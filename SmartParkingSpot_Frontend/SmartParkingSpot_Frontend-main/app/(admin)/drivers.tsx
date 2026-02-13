@@ -22,7 +22,7 @@ interface Driver {
     name: string;
     email: string;
     phone: string;
-    status: string; // active | suspended
+    status: 'active' | 'suspended' | 'pending'; // active | suspended | pending
     vehicleNumber?: string;
     vehicleType?: string;
 }
@@ -123,7 +123,23 @@ export default function AdminDriversScreen() {
     });
 
     const activeCount = drivers.filter(d => d.status === 'active').length;
-    const suspendedCount = drivers.length - activeCount;
+    const pendingCount = drivers.filter(d => d.status === 'pending').length;
+    const suspendedCount = drivers.length - activeCount - pendingCount;
+
+    const handleApproveDriver = async (id: number) => {
+        try {
+            const token = await AsyncStorage.getItem('token');
+            const res = await fetch(`${API}/api/admin/drivers/${id}/approve`, {
+                method: 'PUT',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error('Approval failed');
+            Alert.alert('Success', 'Driver verified and activated.');
+            loadDrivers();
+        } catch (err) {
+            Alert.alert('Error', 'Verification failed');
+        }
+    };
 
     if (loading) {
         return (
@@ -169,6 +185,10 @@ export default function AdminDriversScreen() {
                             <Text className="text-emerald-500 text-3xl font-black">{activeCount}</Text>
                             <Text className="text-emerald-400 text-[10px] font-bold uppercase">Active</Text>
                         </View>
+                        <View className={`${isDark ? 'bg-orange-500/10 border-orange-500/20' : 'bg-orange-50 border-orange-100'} flex-1 rounded-2xl p-4 items-center border`}>
+                            <Text className="text-orange-500 text-3xl font-black">{pendingCount}</Text>
+                            <Text className="text-orange-400 text-[10px] font-bold uppercase">Pending</Text>
+                        </View>
                         <View className={`${isDark ? 'bg-rose-500/10 border-rose-500/20' : 'bg-rose-50 border-rose-100'} flex-1 rounded-2xl p-4 items-center border`}>
                             <Text className="text-rose-500 text-3xl font-black">{suspendedCount}</Text>
                             <Text className="text-rose-400 text-[10px] font-bold uppercase">Suspended</Text>
@@ -212,9 +232,9 @@ export default function AdminDriversScreen() {
                                         <Text className={`text-xl font-black tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>{driver.name}</Text>
                                         <Text className="text-indigo-400 text-xs font-bold uppercase tracking-widest">{driver.email}</Text>
                                     </View>
-                                    <View className={`px-4 py-1.5 rounded-full ${driver.status === 'active' ? (isDark ? 'bg-emerald-500/10' : 'bg-emerald-100') : (isDark ? 'bg-rose-500/10' : 'bg-rose-100')}`}>
-                                        <Text className={`text-[9px] font-black uppercase ${driver.status === 'active' ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                            {driver.status === 'active' ? 'Live' : 'offline'}
+                                    <View className={`px-4 py-1.5 rounded-full ${driver.status === 'active' ? (isDark ? 'bg-emerald-500/10' : 'bg-emerald-100') : (driver.status === 'pending' ? (isDark ? 'bg-orange-500/10' : 'bg-orange-100') : (isDark ? 'bg-rose-500/10' : 'bg-rose-100'))}`}>
+                                        <Text className={`text-[9px] font-black uppercase ${driver.status === 'active' ? 'text-emerald-500' : (driver.status === 'pending' ? 'text-orange-500' : 'text-rose-500')}`}>
+                                            {driver.status === 'active' ? 'Live' : (driver.status === 'pending' ? 'Pending' : 'offline')}
                                         </Text>
                                     </View>
                                 </View>
@@ -245,14 +265,25 @@ export default function AdminDriversScreen() {
                                 </View>
 
                                 <View className="flex-row gap-3">
-                                    <TouchableOpacity
-                                        onPress={() => handleToggleStatus(driver.id, driver.status)}
-                                        className={`flex-1 py-4 rounded-2xl items-center shadow-sm ${driver.status === 'active' ? 'bg-rose-500' : 'bg-indigo-600'}`}
-                                    >
-                                        <Text className="text-white font-black text-xs uppercase tracking-widest">
-                                            {driver.status === 'active' ? 'Suspend Access' : 'Restore Access'}
-                                        </Text>
-                                    </TouchableOpacity>
+                                    {driver.status === 'pending' ? (
+                                        <TouchableOpacity
+                                            onPress={() => handleApproveDriver(driver.id)}
+                                            className="flex-1 py-4 rounded-2xl items-center shadow-sm bg-emerald-500"
+                                        >
+                                            <Text className="text-white font-black text-xs uppercase tracking-widest">
+                                                Approve Driver
+                                            </Text>
+                                        </TouchableOpacity>
+                                    ) : (
+                                        <TouchableOpacity
+                                            onPress={() => handleToggleStatus(driver.id, driver.status)}
+                                            className={`flex-1 py-4 rounded-2xl items-center shadow-sm ${driver.status === 'active' ? 'bg-rose-500' : 'bg-indigo-600'}`}
+                                        >
+                                            <Text className="text-white font-black text-xs uppercase tracking-widest">
+                                                {driver.status === 'active' ? 'Suspend Access' : 'Restore Access'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    )}
 
                                     <TouchableOpacity
                                         onPress={() => Alert.alert('Operator Log', 'Total Bookings: 156\nCustomer Rating: 4.8?\nRevenue Share: ?12,450')}

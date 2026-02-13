@@ -111,8 +111,8 @@ export default function UnifiedRegister({ role }: UnifiedRegisterProps) {
             setIsLoading(false);
             console.log('Registration successful');
 
-            const successMsg = role === 'provider'
-                ? 'Onboarding initiated! Your account is now pending admin approval. You can access the portal once verified.'
+            const successMsg = (role === 'provider' || role === 'driver')
+                ? `Onboarding initiated! Your ${role} account is now pending admin approval. You can access the portal once verified.`
                 : 'Account successfully initialized. Proceeding to login.';
 
             Alert.alert('Success', successMsg, [

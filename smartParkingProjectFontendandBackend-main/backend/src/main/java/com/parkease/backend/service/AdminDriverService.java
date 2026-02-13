@@ -78,7 +78,7 @@ public class AdminDriverService {
         d.email = u.getEmail();
         d.phone = u.getPhoneNumber();
         d.joinedDate = u.getCreatedAt();
-        d.status = u.isEnabled() ? "active" : "suspended";
+        d.status = !u.isApproved() ? "pending" : (u.isEnabled() ? "active" : "suspended");
         d.approved = u.isApproved();
 
         if (u.getVehicleNumber() != null)
