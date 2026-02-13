@@ -42,6 +42,7 @@ export default function AdminDriversScreen() {
     const menuItems = [
         { icon: 'grid', label: 'Dashboard', route: '/(admin)/dashboard' },
         { icon: 'people', label: 'Manage Drivers', route: '/(admin)/drivers' },
+        { icon: 'checkmark-circle', label: 'Driver Approvals', route: '/(admin)/driver-approval' },
         { icon: 'business', label: 'Manage Providers', route: '/(admin)/providers' },
         { icon: 'alert-circle', label: 'Disputes', route: '/(admin)/disputes' },
         { icon: 'bar-chart', label: 'Analytics', route: '/(admin)/analytics' },

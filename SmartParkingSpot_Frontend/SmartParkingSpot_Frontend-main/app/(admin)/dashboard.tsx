@@ -107,6 +107,7 @@ export default function AdminDashboardScreen() {
     const menuItems = [
         { icon: 'grid', label: 'Dashboard', route: '/(admin)/dashboard' },
         { icon: 'people', label: 'Manage Drivers', route: '/(admin)/drivers' },
+        { icon: 'checkmark-circle', label: 'Driver Approvals', route: '/(admin)/driver-approval' },
         { icon: 'business', label: 'Manage Providers', route: '/(admin)/providers' },
         { icon: 'alert-circle', label: 'Disputes', route: '/(admin)/disputes' },
         { icon: 'bar-chart', label: 'Analytics', route: '/(admin)/analytics' },
@@ -131,11 +132,14 @@ export default function AdminDashboardScreen() {
                     return;
                 }
 
-                const [analyticsRes, provRes, profileRes] = await Promise.all([
+                const [analyticsRes, provRes, driveRes, profileRes] = await Promise.all([
                     fetch(`${BASE_URL}/api/admin/analytics?range=${range}`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }),
                     fetch(`${BASE_URL}/api/admin/providers?status=PENDING`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch(`${BASE_URL}/api/admin/drivers?status=PENDING`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     }),
                     fetch(`${BASE_URL}/api/profile`, {
@@ -154,10 +158,16 @@ export default function AdminDashboardScreen() {
                     setAnalytics(data);
                 }
 
+                let pending = [];
                 if (provRes.ok) {
                     const provData = await provRes.json();
-                    setPendingProviders(provData.slice(0, 3));
+                    pending.push(...provData.map((p: any) => ({ ...p, type: 'PROVIDER' })));
                 }
+                if (driveRes.ok) {
+                    const driveData = await driveRes.json();
+                    pending.push(...driveData.map((d: any) => ({ ...d, type: 'DRIVER' })));
+                }
+                setPendingProviders(pending.slice(0, 5)); // Re-using existing state for both
 
                 if (profileRes.ok) {
                     const profData = await profileRes.json();
@@ -297,20 +307,25 @@ export default function AdminDashboardScreen() {
                             <Text className="text-gray-500 mt-4 font-bold text-center">All operators verified</Text>
                         </View>
                     ) : (
-                        pendingProviders.map((provider, idx) => (
+                        pendingProviders.map((user, idx) => (
                             <TouchableOpacity
-                                key={provider.id}
-                                onPress={() => router.push(`/(admin)/providers` as any)}
+                                key={user.id + user.type}
+                                onPress={() => router.push(user.type === 'PROVIDER' ? `/(admin)/providers` : `/(admin)/driver-approval` as any)}
                                 className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-100'} rounded-[32px] p-6 mb-4 flex-row items-center border shadow-sm`}
                             >
                                 <View className={`w-14 h-14 ${isDark ? 'bg-indigo-500/10 border-indigo-500/20' : 'bg-indigo-50 border-indigo-100'} rounded-2xl items-center justify-center mr-4 border`}>
-                                    <Text className="text-indigo-600 text-xl font-black">{provider.name?.charAt(0) || '?'}</Text>
+                                    <Ionicons name={user.type === 'PROVIDER' ? 'business' : 'car'} size={24} color="#4F46E5" />
                                 </View>
                                 <View className="flex-1">
-                                    <Text className={`font-black text-base ${isDark ? 'text-white' : 'text-gray-900'}`}>{provider.name}</Text>
+                                    <View className="flex-row items-center">
+                                        <Text className={`font-black text-base ${isDark ? 'text-white' : 'text-gray-900'}`}>{user.name || user.ownerName}</Text>
+                                        <View className={`ml-2 px-2 py-0.5 rounded-md ${user.type === 'PROVIDER' ? 'bg-purple-100' : 'bg-blue-100'}`}>
+                                            <Text className={`text-[8px] font-black ${user.type === 'PROVIDER' ? 'text-purple-600' : 'text-blue-600'}`}>{user.type}</Text>
+                                        </View>
+                                    </View>
                                     <View className="flex-row items-center mt-1">
                                         <Ionicons name="mail" size={12} color="#94A3B8" />
-                                        <Text className="text-gray-400 text-[10px] font-bold ml-1">{provider.email}</Text>
+                                        <Text className="text-gray-400 text-[10px] font-bold ml-1">{user.email}</Text>
                                     </View>
                                 </View>
                                 <View className={`${isDark ? 'bg-slate-800' : 'bg-gray-50'} p-2 rounded-xl`}>

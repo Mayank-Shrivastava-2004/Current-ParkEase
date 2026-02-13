@@ -19,9 +19,16 @@ public class AdminDriverService {
     }
 
     // ===== GET ALL DRIVERS =====
-    public List<AdminDriverResponse> getDrivers() {
+    public List<AdminDriverResponse> getDrivers(String status) {
         return userRepository.findByRole(Role.DRIVER)
                 .stream()
+                .filter(u -> {
+                    if ("PENDING".equalsIgnoreCase(status))
+                        return !u.isApproved();
+                    if ("APPROVED".equalsIgnoreCase(status))
+                        return u.isApproved();
+                    return true;
+                })
                 .map(this::map)
                 .toList();
     }
@@ -72,6 +79,7 @@ public class AdminDriverService {
         d.phone = u.getPhoneNumber();
         d.joinedDate = u.getCreatedAt();
         d.status = u.isEnabled() ? "active" : "suspended";
+        d.approved = u.isApproved();
 
         if (u.getVehicleNumber() != null)
             d.vehicleNumber = u.getVehicleNumber();

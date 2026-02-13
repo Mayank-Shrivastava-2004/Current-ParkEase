@@ -82,9 +82,9 @@ public class AuthService {
             user.setLocation(request.getLocation() != null ? request.getLocation() : "Not Specified");
             user.setTotalSlots(request.getTotalSlots() != null ? request.getTotalSlots() : 0);
         } else if (request.getRole() == Role.DRIVER) {
-            user.setApproved(true); // Drivers are auto-approved for instant access
+            user.setApproved(false); // Drivers now require admin approval
             user.setEnabled(true);
-            user.setVerificationStatus(com.parkease.backend.enumtype.VerificationStatus.APPROVED);
+            user.setVerificationStatus(com.parkease.backend.enumtype.VerificationStatus.PENDING);
 
             // Map Vehicle Details
             user.setVehicleName(request.getVehicleName());
@@ -126,7 +126,7 @@ public class AuthService {
         }
 
         /* 📩 RESPONSE */
-        if (request.getRole() == Role.PROVIDER) {
+        if (request.getRole() == Role.PROVIDER || request.getRole() == Role.DRIVER) {
             return AuthResponse.builder()
                     .message("Registered successfully. Await admin approval.")
                     .role(user.getRole().name())
@@ -166,19 +166,21 @@ public class AuthService {
 
         /*
          * =====================================================
-         * PROVIDER APPROVAL ENFORCEMENT
+         * PROVIDER & DRIVER APPROVAL ENFORCEMENT
          * =====================================================
          */
-        if (user.getRole() == Role.PROVIDER) {
+        if (user.getRole() == Role.PROVIDER || user.getRole() == Role.DRIVER) {
 
             if (!user.isApproved()) {
+                String type = user.getRole() == Role.PROVIDER ? "provider" : "driver";
                 throw new RuntimeException(
-                        "Your provider account is awaiting admin approval.");
+                        "Your " + type + " account is awaiting admin approval.");
             }
 
             if (!user.isEnabled()) {
+                String type = user.getRole() == Role.PROVIDER ? "provider" : "driver";
                 throw new RuntimeException(
-                        "Your provider account has been suspended by admin.");
+                        "Your " + type + " account has been suspended by admin.");
             }
         }
 

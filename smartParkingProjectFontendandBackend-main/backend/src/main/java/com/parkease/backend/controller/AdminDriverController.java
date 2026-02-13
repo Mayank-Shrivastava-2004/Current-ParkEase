@@ -20,8 +20,8 @@ public class AdminDriverController {
     }
 
     @GetMapping
-    public List<AdminDriverResponse> getDrivers() {
-        return service.getDrivers();
+    public List<AdminDriverResponse> getDrivers(@RequestParam(required = false) String status) {
+        return service.getDrivers(status);
     }
 
     @PutMapping("/{id}/approve")

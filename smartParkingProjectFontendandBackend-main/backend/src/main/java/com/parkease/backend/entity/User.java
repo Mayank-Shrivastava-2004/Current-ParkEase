@@ -151,11 +151,11 @@ public class User {
         this.role = role;
 
         // 🔐 Role-based defaults
-        if (role == Role.PROVIDER) {
+        if (role == Role.PROVIDER || role == Role.DRIVER) {
             this.approved = false;
             this.verificationStatus = VerificationStatus.PENDING;
         } else {
-            this.approved = true; // ADMIN & DRIVER
+            this.approved = true; // ADMIN
             this.verificationStatus = VerificationStatus.APPROVED;
         }
     }
