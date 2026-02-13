@@ -1,0 +1,14 @@
+# Node / React
+node_modules/
+dist/
+build/
+
+# Java / Spring Boot
+target/
+
+# IDE
+.vscode/
+.idea/
+
+# Env
+.env
