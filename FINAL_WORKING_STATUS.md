@@ -13,7 +13,7 @@
 
 ### **Backend Start Command:**
 ```powershell
-cd "c:\JAVA Springboard Internship\current work 06\smartParkingProjectFontendandBackend-main\backend"
+cd "c:\Users\MAYANK\Downloads\ParkEaseSmartParkingSpotFinderApication-main (1)\ParkEaseSmartParkingSpotFinderApication-main\smartParkingProjectFontendandBackend-main\backend"
 java -jar target\backend-0.0.1-SNAPSHOT.jar
 ```
 
@@ -28,7 +28,7 @@ java -jar target\backend-0.0.1-SNAPSHOT.jar
 
 ### **Frontend Start Command:**
 ```powershell
-cd "c:\JAVA Springboard Internship\current work 06\SmartParkingSpot_Frontend\SmartParkingSpot_Frontend-main"
+cd "c:\Users\MAYANK\Downloads\ParkEaseSmartParkingSpotFinderApication-main (1)\ParkEaseSmartParkingSpotFinderApication-main\SmartParkingSpot_Frontend\SmartParkingSpot_Frontend-main"
 npx expo start --port 8083
 ```
 
