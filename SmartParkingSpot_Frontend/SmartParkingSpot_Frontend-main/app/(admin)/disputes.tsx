@@ -30,6 +30,7 @@ export default function AdminDisputesScreen() {
         { icon: 'people', label: 'Manage Drivers', route: '/(admin)/drivers' },
         { icon: 'business', label: 'Manage Providers', route: '/(admin)/providers' },
         { icon: 'alert-circle', label: 'Disputes', route: '/(admin)/disputes' },
+        { icon: 'notifications', label: 'Notifications', route: '/(admin)/notifications' },
         { icon: 'bar-chart', label: 'Analytics', route: '/(admin)/analytics' },
         { icon: 'person-circle', label: 'Account Profile', route: '/(admin)/profile' },
         { icon: 'settings', label: 'Settings', route: '/(admin)/settings' },

@@ -1,162 +1,231 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
     ActivityIndicator,
-    ScrollView,
+    FlatList,
+    RefreshControl,
     StatusBar,
     Text,
     TouchableOpacity,
     View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
 import UnifiedHeader from '../../components/UnifiedHeader';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import UnifiedSidebar from '../../components/UnifiedSidebar';
+import Animated, { FadeInUp } from 'react-native-reanimated';
+import BASE_URL from '../../constants/api';
 
-export default function AdminNotifications() {
+interface Notification {
+    id: number;
+    message: string;
+    type: string;
+    refId: number;
+    read: boolean;
+    createdAt: string;
+}
+
+export default function AdminNotificationsScreen() {
     const router = useRouter();
+    const [notifications, setNotifications] = useState<Notification[]>([]);
     const [loading, setLoading] = useState(true);
-    const [notifications, setNotifications] = useState<any[]>([]);
-    const API = 'http://10.67.158.172:8080';
+    const [refreshing, setRefreshing] = useState(false);
+    const [sidebarVisible, setSidebarVisible] = useState(false);
+    const [isDark, setIsDark] = useState(false);
 
     const adminGradient: readonly [string, string, ...string[]] = ['#4F46E5', '#312E81'];
 
-    useEffect(() => {
-        loadNotifications();
-    }, []);
+    const menuItems = [
+        { icon: 'grid', label: 'Dashboard', route: '/(admin)/dashboard' },
+        { icon: 'people', label: 'Manage Drivers', route: '/(admin)/drivers' },
+        { icon: 'business', label: 'Manage Providers', route: '/(admin)/providers' },
+        { icon: 'alert-circle', label: 'Disputes', route: '/(admin)/disputes' },
+        { icon: 'notifications', label: 'Notifications', route: '/(admin)/notifications' },
+        { icon: 'bar-chart', label: 'Analytics', route: '/(admin)/analytics' },
+        { icon: 'person-circle', label: 'Account Profile', route: '/(admin)/profile' },
+        { icon: 'settings', label: 'Settings', route: '/(admin)/settings' },
+    ];
 
-    const loadNotifications = async () => {
+    const loadTheme = async () => {
+        try {
+            const settingsStr = await AsyncStorage.getItem('admin_settings');
+            if (settingsStr) {
+                const settings = JSON.parse(settingsStr);
+                setIsDark(settings.darkMode ?? false);
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    const fetchNotifications = useCallback(async () => {
         try {
             const token = await AsyncStorage.getItem('token');
-            const res = await fetch(`${API}/api/admin/notifications`, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
+            if (!token) {
+                router.replace('/' as any);
+                return;
+            }
+
+            const res = await fetch(`${BASE_URL}/api/admin/notifications`, {
+                headers: { 'Authorization': `Bearer ${token}` }
             });
 
-            if (!res.ok) throw new Error('Failed to fetch notifications');
-
-            const data = await res.json();
-            setNotifications(data);
+            if (res.ok) {
+                const data = await res.json();
+                setNotifications(data.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+            }
         } catch (err) {
-            console.error('Failed to load notifications', err);
+            console.error('Failed to fetch notifications', err);
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
+    }, [router]);
+
+    useEffect(() => {
+        loadTheme();
+        fetchNotifications();
+    }, [fetchNotifications]);
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        fetchNotifications();
     };
 
     const markAsRead = async (id: number) => {
         try {
             const token = await AsyncStorage.getItem('token');
-            await fetch(`${API}/api/admin/notifications/${id}/read`, {
+            const res = await fetch(`${BASE_URL}/api/admin/notifications/${id}/read`, {
                 method: 'PUT',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
+                headers: { 'Authorization': `Bearer ${token}` }
             });
-            loadNotifications();
+
+            if (res.ok) {
+                setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+            }
         } catch (err) {
             console.error('Failed to mark as read', err);
         }
     };
 
-    const getNotificationIcon = (type: string) => {
-        switch (type) {
-            case 'provider': return 'business';
-            case 'system': return 'settings';
-            case 'success': return 'trophy';
-            default: return 'notifications';
+    const handleNotificationPress = async (notification: Notification) => {
+        if (!notification.read) {
+            markAsRead(notification.id);
+        }
+
+        // Deep linking logic
+        if (notification.type === 'PROVIDER_REGISTRATION') {
+            router.push('/(admin)/providers');
+        } else if (notification.type === 'DRIVER_REGISTRATION') {
+            router.push('/(admin)/drivers');
+        } else if (notification.type === 'DISPUTE_RAISED') {
+            router.push('/(admin)/disputes');
         }
     };
 
-    const getNotificationColor = (type: string) => {
-        switch (type) {
-            case 'provider': return '#F59E0B';
-            case 'system': return '#6366F1';
-            case 'success': return '#10B981';
-            default: return '#94A3B8';
-        }
+    const handleLogout = async () => {
+        await AsyncStorage.clear();
+        router.replace('/' as any);
     };
+
+    const renderItem = ({ item, index }: { item: Notification, index: number }) => (
+        <Animated.View entering={FadeInUp.delay(index * 50)}>
+            <TouchableOpacity
+                onPress={() => handleNotificationPress(item)}
+                className={`${isDark ? (item.read ? 'bg-slate-900/50' : 'bg-slate-800') : (item.read ? 'bg-gray-50' : 'bg-white')} rounded-3xl p-6 mb-4 flex-row items-center border ${isDark ? 'border-slate-800' : 'border-gray-100'} shadow-sm`}
+            >
+                <View className={`w-12 h-12 rounded-2xl items-center justify-center mr-4 ${isDark ? 'bg-indigo-500/10' : 'bg-indigo-50'}`}>
+                    <Ionicons
+                        name={
+                            item.type?.includes('PROVIDER') ? 'business' :
+                                item.type?.includes('DRIVER') ? 'car' :
+                                    item.type?.includes('DISPUTE') ? 'alert-circle' : 'notifications'
+                        }
+                        size={22}
+                        color="#6366F1"
+                    />
+                </View>
+
+                <View className="flex-1">
+                    <View className="flex-row items-center justify-between mb-1">
+                        <Text className={`text-[8px] font-black uppercase tracking-widest ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}>
+                            {item.type || 'SYSTEM'}
+                        </Text>
+                        <Text className="text-gray-400 text-[8px] font-bold">
+                            {new Date(item.createdAt).toLocaleString([], { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}
+                        </Text>
+                    </View>
+                    <Text className={`text-sm ${isDark ? 'text-white' : 'text-gray-900'} ${item.read ? 'font-medium' : 'font-black'} leading-tight`}>
+                        {item.message}
+                    </Text>
+                </View>
+
+                {!item.read && (
+                    <View className="ml-3 w-2 h-2 rounded-full bg-indigo-600" />
+                )}
+            </TouchableOpacity>
+        </Animated.View>
+    );
 
     if (loading) {
         return (
-            <View className="flex-1 bg-white justify-center items-center">
+            <View className={`flex-1 justify-center items-center ${isDark ? 'bg-slate-950' : 'bg-white'}`}>
                 <ActivityIndicator size="large" color="#4F46E5" />
+                <Text className="mt-4 text-indigo-500 font-bold uppercase tracking-widest text-[8px]">Fetching Logs...</Text>
             </View>
         );
     }
 
     return (
-        <View className="flex-1 bg-gray-50">
+        <View className={`flex-1 ${isDark ? 'bg-slate-950' : 'bg-gray-50'}`}>
             <StatusBar barStyle="light-content" />
 
             <UnifiedHeader
-                title="Notifications"
-                subtitle="System Alerts"
+                title="System Activity"
+                subtitle="Live Event Stream"
                 role="admin"
                 gradientColors={adminGradient}
-                onMenuPress={() => router.back()}
+                onMenuPress={() => setSidebarVisible(true)}
                 userName="Admin"
-                showBackButton={true}
+                notificationCount={notifications.filter(n => !n.read).length}
             />
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
-                <View className="px-5 mt-6">
-                    <Text className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-4">
-                        Recent Alerts
-                    </Text>
+            <UnifiedSidebar
+                isOpen={sidebarVisible}
+                onClose={() => setSidebarVisible(false)}
+                userName="Administrator"
+                userRole="Root Authority"
+                userStatus="Mainframe Online"
+                menuItems={menuItems}
+                onLogout={handleLogout}
+                gradientColors={adminGradient}
+                dark={isDark}
+            />
 
-                    {notifications.map((notif, index) => (
-                        <Animated.View
-                            key={notif.id}
-                            entering={FadeInDown.delay(index * 100)}
-                        >
-                            <TouchableOpacity
-                                onPress={() => markAsRead(notif.id)}
-                                className={`bg-white rounded-3xl p-5 mb-4 border ${notif.read ? 'border-gray-100' : 'border-indigo-100'} shadow-sm`}
-                            >
-                                <View className="flex-row items-start">
-                                    <View
-                                        className="w-12 h-12 rounded-2xl items-center justify-center mr-4"
-                                        style={{ backgroundColor: `${getNotificationColor(notif.type)}15` }}
-                                    >
-                                        <Ionicons
-                                            name={getNotificationIcon(notif.type) as any}
-                                            size={24}
-                                            color={getNotificationColor(notif.type)}
-                                        />
-                                    </View>
-                                    <View className="flex-1">
-                                        <View className="flex-row items-center justify-between mb-1">
-                                            <Text className="font-black text-gray-900 flex-1">
-                                                {notif.type?.replace('_', ' ') || 'New Alert'}
-                                            </Text>
-                                            {!notif.read && (
-                                                <View className="w-2 h-2 bg-indigo-600 rounded-full ml-2" />
-                                            )}
-                                        </View>
-                                        <Text className="text-gray-600 text-sm mb-2">{notif.message}</Text>
-                                        <Text className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">
-                                            {new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {new Date(notif.createdAt).toLocaleDateString()}
-                                        </Text>
-                                    </View>
-                                </View>
-                            </TouchableOpacity>
-                        </Animated.View>
-                    ))}
-
-                    {notifications.length === 0 && (
-                        <View className="bg-white rounded-3xl p-10 items-center border border-dashed border-gray-200">
-                            <View className="w-16 h-16 bg-gray-50 rounded-full items-center justify-center mb-4">
-                                <Ionicons name="notifications-off" size={32} color="#CBD5E1" />
-                            </View>
-                            <Text className="text-gray-400 font-bold uppercase tracking-widest text-center text-xs">
-                                No notifications
-                            </Text>
+            <FlatList
+                data={notifications}
+                renderItem={renderItem}
+                keyExtractor={item => item.id.toString()}
+                contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4F46E5" />
+                }
+                ListHeaderComponent={() => (
+                    <View className="mb-6 flex-row items-center justify-between">
+                        <Text className={`font-black text-2xl ${isDark ? 'text-white' : 'text-gray-900'}`}>Notifications</Text>
+                        <View className="bg-indigo-600 px-3 py-1 rounded-full">
+                            <Text className="text-white text-[10px] font-black">{notifications.length} TOTAL</Text>
                         </View>
-                    )}
-                </View>
-            </ScrollView>
+                    </View>
+                )}
+                ListEmptyComponent={() => (
+                    <View className="flex-1 items-center justify-center mt-20">
+                        <Ionicons name="notifications-off-outline" size={64} color={isDark ? '#1E293B' : '#E2E8F0'} />
+                        <Text className="text-gray-400 mt-4 font-bold uppercase tracking-widest text-xs text-center">No system events recorded</Text>
+                    </View>
+                )}
+            />
         </View>
     );
 }

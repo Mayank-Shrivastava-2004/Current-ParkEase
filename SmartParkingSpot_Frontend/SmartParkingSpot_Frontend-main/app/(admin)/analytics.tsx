@@ -1,11 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StatusBar, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StatusBar, Text, TouchableOpacity, View, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import BASE_URL from '../../constants/api';
+import UnifiedHeader from '../../components/UnifiedHeader';
+import UnifiedSidebar from '../../components/UnifiedSidebar';
 
 const API = BASE_URL;
 
@@ -14,15 +16,33 @@ export default function AnalyticsScreen() {
     const [analytics, setAnalytics] = useState<any>({
         revenue: { total: 0, platformFees: 0, providerEarnings: 0, avgDailyRevenue: 0 },
         userGrowth: {
-            drivers: { total: 0, newThisWeek: 0, activeRate: 0 },
-            providers: { total: 0, newThisWeek: 0, activeRate: 0 },
+            drivers: { total: 0, newThisWeek: 0 },
+            providers: { total: 0, newThisWeek: 0 },
         },
         bookingTrend: [],
         peakHours: [],
+        demandZones: [],
+        activeDriversLocation: [],
+        providerAvailability: { free: 0, busy: 0, total: 0 }
     });
+    const [adminProfile, setAdminProfile] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [revenueTab, setRevenueTab] = useState<'WEEK' | 'MONTH' | 'YEAR'>('WEEK');
     const [isDark, setIsDark] = useState(false);
+    const [sidebarVisible, setSidebarVisible] = useState(false);
+
+    const adminGradient: readonly [string, string, ...string[]] = ['#4F46E5', '#312E81'];
+
+    const menuItems = [
+        { icon: 'grid', label: 'Dashboard', route: '/(admin)/dashboard' },
+        { icon: 'people', label: 'Manage Drivers', route: '/(admin)/drivers' },
+        { icon: 'business', label: 'Manage Providers', route: '/(admin)/providers' },
+        { icon: 'alert-circle', label: 'Disputes', route: '/(admin)/disputes' },
+        { icon: 'notifications', label: 'Notifications', route: '/(admin)/notifications' },
+        { icon: 'bar-chart', label: 'Analytics', route: '/(admin)/analytics' },
+        { icon: 'person-circle', label: 'Account Profile', route: '/(admin)/profile' },
+        { icon: 'settings', label: 'Settings', route: '/(admin)/settings' },
+    ];
 
     useEffect(() => {
         const loadAnalytics = async () => {
@@ -42,6 +62,13 @@ export default function AnalyticsScreen() {
                 if (res.ok) {
                     const data = await res.json();
                     setAnalytics(data);
+                }
+
+                const profRes = await fetch(`${API}/api/profile`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                if (profRes.ok) {
+                    setAdminProfile(await profRes.json());
                 }
             } catch (err) {
                 console.error('Analytics fetch failed:', err);
@@ -69,21 +96,30 @@ export default function AnalyticsScreen() {
         <View className={`flex-1 ${isDark ? 'bg-slate-950' : 'bg-gray-50'}`}>
             <StatusBar barStyle="light-content" />
 
-            {/* HEADER */}
-            <LinearGradient colors={['#4F46E5', '#312E81']} className="pt-14 pb-12 px-5 rounded-b-[40px] shadow-2xl">
-                <View className="flex-row items-center">
-                    <TouchableOpacity
-                        onPress={() => router.back()}
-                        className="w-12 h-12 bg-white/20 rounded-2xl justify-center items-center mr-4 border border-white/30"
-                    >
-                        <Ionicons name="arrow-back" size={20} color="white" />
-                    </TouchableOpacity>
-                    <View className="flex-1">
-                        <Text className="text-white/60 text-[10px] font-black uppercase tracking-widest">Global Intelligence</Text>
-                        <Text className="text-white text-3xl font-black tracking-tight">Mainframe Analysis</Text>
-                    </View>
-                </View>
-            </LinearGradient>
+            <UnifiedHeader
+                title="Global Intelligence"
+                subtitle="Mainframe Analysis"
+                role="admin"
+                gradientColors={adminGradient}
+                onMenuPress={() => setSidebarVisible(true)}
+                userName={adminProfile?.name || "Admin"}
+                showBackButton={true}
+            />
+
+            <UnifiedSidebar
+                isOpen={sidebarVisible}
+                onClose={() => setSidebarVisible(false)}
+                userName={adminProfile?.name || "Administrator"}
+                userRole={adminProfile?.role || "System Analyst"}
+                userStatus="Mainframe Core Online"
+                menuItems={menuItems}
+                onLogout={async () => {
+                    await AsyncStorage.clear();
+                    router.replace('/' as any);
+                }}
+                gradientColors={adminGradient}
+                dark={isDark}
+            />
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
                 {/* REVENUE OVERVIEW */}
@@ -168,7 +204,11 @@ export default function AnalyticsScreen() {
                     <Text className={`font-black text-xl mb-4 tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>Network Expansion</Text>
                     <View className="flex-row gap-4">
                         {/* DRIVERS CARD */}
-                        <View className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-100'} flex-1 rounded-[32px] p-6 shadow-2xl shadow-black/5 border`}>
+                        <TouchableOpacity
+                            activeOpacity={0.7}
+                            onPress={() => router.push('/(admin)/drivers')}
+                            className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-100'} flex-1 rounded-[32px] p-6 shadow-2xl shadow-black/5 border`}
+                        >
                             <View className={`w-14 h-14 ${isDark ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-emerald-50 border-emerald-100'} rounded-2xl items-center justify-center mb-4 border`}>
                                 <Ionicons name="car" size={24} color="#10B981" />
                             </View>
@@ -178,10 +218,14 @@ export default function AnalyticsScreen() {
                                 <Text className="text-emerald-500 text-[8px] font-black uppercase">Weekly Growth +{analytics.userGrowth.drivers.newThisWeek}</Text>
                                 <Text className="text-slate-500 text-[8px] font-black uppercase mt-1">Efficiency ACTIVE</Text>
                             </View>
-                        </View>
+                        </TouchableOpacity>
 
                         {/* PROVIDERS CARD */}
-                        <View className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-100'} flex-1 rounded-[32px] p-6 shadow-2xl shadow-black/5 border`}>
+                        <TouchableOpacity
+                            activeOpacity={0.7}
+                            onPress={() => router.push('/(admin)/providers')}
+                            className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-100'} flex-1 rounded-[32px] p-6 shadow-2xl shadow-black/5 border`}
+                        >
                             <View className={`w-14 h-14 ${isDark ? 'bg-indigo-500/10 border-indigo-500/20' : 'bg-indigo-50 border-indigo-100'} rounded-2xl items-center justify-center mb-4 border`}>
                                 <Ionicons name="business" size={24} color="#6366F1" />
                             </View>
@@ -191,32 +235,101 @@ export default function AnalyticsScreen() {
                                 <Text className="text-indigo-500 text-[8px] font-black uppercase">Expansion +{analytics.userGrowth.providers.newThisWeek}</Text>
                                 <Text className="text-slate-500 text-[8px] font-black uppercase mt-1">Uptime OPTIMAL</Text>
                             </View>
-                        </View>
+                        </TouchableOpacity>
                     </View>
                 </View>
 
-                {/* PEAK HOURS ANALYSIS */}
+                {/* FLEET INTELLIGENCE (Requirement 4) */}
                 <View className="px-5 mt-10">
-                    <Text className={`font-black text-xl mb-4 tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>Operational Hotspots</Text>
-                    <View className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-100'} rounded-[40px] p-8 shadow-2xl shadow-black/5 border`}>
-                        {(analytics.peakHours || []).map((hour: any, index: number) => {
-                            const width = (hour.bookings / maxPeakBookings) * 100;
-                            return (
-                                <View key={index} className="mb-6">
-                                    <View className="flex-row items-center justify-between mb-2.5">
-                                        <Text className={`text-[10px] font-black uppercase tracking-widest ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>{hour.timeSlot}</Text>
-                                        <Text className={`text-xs font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>{hour.bookings} EVENTS</Text>
+                    <Text className={`font-black text-xl mb-4 tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>Demand Zones & Fleet</Text>
+
+                    <View className="flex-row gap-4 mb-4">
+                        {/* Provider Availability */}
+                        <View className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-100'} flex-1 rounded-[32px] p-6 border`}>
+                            <Text className="text-gray-500 text-[8px] font-black uppercase tracking-widest mb-3">Unit Status</Text>
+                            <View className="flex-row items-center justify-between mb-2">
+                                <Text className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>Available</Text>
+                                <Text className={`text-xs font-black text-emerald-500`}>{analytics.providerAvailability.free}</Text>
+                            </View>
+                            <View className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                <View className="h-full bg-emerald-500" style={{ width: `${(analytics.providerAvailability.free / analytics.providerAvailability.total) * 100}%` }} />
+                            </View>
+                            <View className="flex-row items-center justify-between mt-4 mb-2">
+                                <Text className={`text-xs font-bold ${isDark ? 'text-slate-400' : 'text-gray-600'}`}>Occupied</Text>
+                                <Text className={`text-xs font-black text-rose-500`}>{analytics.providerAvailability.busy}</Text>
+                            </View>
+                            <View className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                <View className="h-full bg-rose-500" style={{ width: `${(analytics.providerAvailability.busy / analytics.providerAvailability.total) * 100}%` }} />
+                            </View>
+                        </View>
+
+                        {/* Demand Intensity */}
+                        <View className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-100'} flex-1 rounded-[32px] p-6 border`}>
+                            <Text className="text-gray-500 text-[8px] font-black uppercase tracking-widest mb-4">Demand Surge</Text>
+                            {analytics.demandZones.slice(0, 2).map((zone: any, i: number) => (
+                                <View key={i} className="mb-3">
+                                    <View className="flex-row justify-between mb-1">
+                                        <Text className={`text-[10px] font-bold ${isDark ? 'text-white' : 'text-gray-800'}`}>{zone.area}</Text>
+                                        <Text className="text-indigo-500 text-[8px] font-black">{zone.intensity}%</Text>
                                     </View>
-                                    <View className={`h-2.5 ${isDark ? 'bg-slate-800' : 'bg-indigo-50'} rounded-full overflow-hidden`}>
-                                        <View
-                                            className={`h-full ${isDark ? 'bg-indigo-500' : 'bg-slate-800'} rounded-full`}
-                                            style={{ width: `${width}%` }}
-                                        />
+                                    <View className="h-1 bg-indigo-100 rounded-full">
+                                        <View className="h-full bg-indigo-500" style={{ width: `${zone.intensity}%` }} />
                                     </View>
                                 </View>
-                            );
-                        })}
+                            ))}
+                        </View>
                     </View>
+
+                    {/* Active Drivers List (The "Map") */}
+                    <View className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-100'} rounded-[40px] p-8 border mb-6`}>
+                        <Text className="text-gray-500 text-[10px] font-black uppercase tracking-[4px] mb-6">Live Fleet Deployment</Text>
+                        {analytics.activeDriversLocation.length === 0 ? (
+                            <Text className="text-gray-400 text-center py-4 font-bold">No active units detected</Text>
+                        ) : analytics.activeDriversLocation.map((driver: any, i: number) => (
+                            <View key={i} className={`flex-row items-center justify-between py-4 ${i !== analytics.activeDriversLocation.length - 1 ? 'border-b ' + (isDark ? 'border-slate-800' : 'border-gray-50') : ''}`}>
+                                <View className="flex-row items-center">
+                                    <View className="w-2 h-2 rounded-full bg-emerald-500 mr-3 shadow-sm shadow-emerald-500" />
+                                    <View>
+                                        <Text className={`text-xs font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>{driver.driverName}</Text>
+                                        <Text className="text-[8px] text-gray-400 font-bold uppercase">{driver.area}</Text>
+                                    </View>
+                                </View>
+                                <View className="bg-emerald-500/10 px-2 py-1 rounded-lg">
+                                    <Text className="text-emerald-500 text-[8px] font-black">{driver.status}</Text>
+                                </View>
+                            </View>
+                        ))}
+                    </View>
+                </View>
+
+                {/* COMMAND STATION */}
+                <View className="px-5 mt-4">
+                    <Text className={`font-black text-xl mb-4 tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>Command Station</Text>
+                    <View className="flex-row gap-4 mb-4">
+                        <TouchableOpacity
+                            onPress={() => Alert.alert("Broadcast", "Initiating global broadcast protocol...")}
+                            className="bg-indigo-600 flex-1 py-6 rounded-[32px] items-center justify-center shadow-lg shadow-indigo-600/30"
+                        >
+                            <Ionicons name="megaphone" size={24} color="white" />
+                            <Text className="text-white font-black text-[10px] mt-2 uppercase tracking-widest">Broadcast</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                            onPress={() => Alert.alert("System Freeze", "Confirm platform lockdown?", [{ text: "Cancel" }, { text: "Lockdown", style: "destructive" }])}
+                            className="bg-rose-500 flex-1 py-6 rounded-[32px] items-center justify-center shadow-lg shadow-rose-500/30"
+                        >
+                            <Ionicons name="snow" size={24} color="white" />
+                            <Text className="text-white font-black text-[10px] mt-2 uppercase tracking-widest">System Freeze</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <TouchableOpacity
+                        className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-100'} w-full py-6 rounded-[32px] border items-center flex-row justify-center`}
+                        onPress={() => router.push('/(admin)/settings')}
+                    >
+                        <Ionicons name="settings" size={20} color="#6366F1" />
+                        <Text className="text-indigo-500 font-black text-[10px] ml-3 uppercase tracking-widest">Master Configuration</Text>
+                    </TouchableOpacity>
                 </View>
             </ScrollView>
         </View>

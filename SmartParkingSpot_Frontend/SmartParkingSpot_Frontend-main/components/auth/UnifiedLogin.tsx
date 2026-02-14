@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { login } from '../api/auth';
 import ParkEaseLogo from '../ParkEaseLogo';
 
@@ -73,7 +74,21 @@ export default function UnifiedLogin({ role }: UnifiedLoginProps) {
 
         try {
             const response = await login({ email: email.trim(), password });
-            console.log('Login successful, navigating to dashboard...');
+            console.log('Login response:', response);
+
+            // ✅ CHECK IF USER IS APPROVED
+            if (response.user && response.user.approved === false) {
+                console.log('User not approved, redirecting to pending approval screen...');
+                // Store user info for the pending screen
+                await AsyncStorage.setItem('userName', response.user.name || 'User');
+                await AsyncStorage.setItem('role', response.user.role || role.toUpperCase());
+
+                setIsLoading(false);
+                router.replace('/pending-approval' as any);
+                return;
+            }
+
+            console.log('User approved, navigating to dashboard...');
 
             // Small delay to ensure state updates if needed
             setTimeout(() => {
@@ -86,11 +101,11 @@ export default function UnifiedLogin({ role }: UnifiedLoginProps) {
 
             let errorMessage = 'Authentication error. Please re-verify.';
             if (error.code === 'ECONNABORTED') {
-                errorMessage = 'Server connection timed out. Please check if the backend is running and the IP is correct (10.67.158.172).';
+                errorMessage = 'Server connection timed out. Please check if the backend is running and the IP is correct (10.38.124.172).';
             } else if (error.response) {
                 errorMessage = error.response.data?.message || `Server error: ${error.response.status}`;
             } else if (error.request) {
-                errorMessage = 'No response from server. Check your network or backend IP configuration (10.67.158.172).';
+                errorMessage = 'No response from server. Check your network or backend IP configuration (10.38.124.172).';
             } else {
                 errorMessage = error.message || errorMessage;
             }

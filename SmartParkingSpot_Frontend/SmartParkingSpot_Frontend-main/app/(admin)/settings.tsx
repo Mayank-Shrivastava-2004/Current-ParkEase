@@ -175,6 +175,22 @@ export default function AdminSettingsScreen() {
                     </Animated.View>
 
                     <TouchableOpacity
+                        onPress={() => router.push('/(admin)/profile')}
+                        className={`${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-indigo-50 shadow-sm'} rounded-[40px] p-8 border flex-row items-center justify-between mb-6`}
+                    >
+                        <View className="flex-row items-center">
+                            <View className={`w-12 h-12 ${darkMode ? 'bg-slate-800' : 'bg-indigo-50'} rounded-2xl items-center justify-center mr-4`}>
+                                <Ionicons name="lock-closed" size={22} color="#6366F1" />
+                            </View>
+                            <View>
+                                <Text className={`font-black text-base ${darkMode ? 'text-white' : 'text-slate-900'}`}>Security Protocol</Text>
+                                <Text className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Update Access Credentials</Text>
+                            </View>
+                        </View>
+                        <Ionicons name="chevron-forward" size={20} color="#6366F1" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
                         onPress={handleLogout}
                         className={`${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-rose-50 border-rose-100'} rounded-[40px] p-8 border flex-row items-center justify-center mb-10`}
                     >

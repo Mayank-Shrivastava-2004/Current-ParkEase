@@ -41,6 +41,9 @@ export default function UnifiedRegister({ role }: UnifiedRegisterProps) {
     const [parkingAreaName, setParkingAreaName] = useState('');
     const [location, setLocation] = useState('');
     const [totalSlots, setTotalSlots] = useState('');
+    const [ownerName, setOwnerName] = useState('');
+    const [aadharNumber, setAadharNumber] = useState('');
+    const [propertyPermitNumber, setPropertyPermitNumber] = useState('');
 
     const config = {
         driver: {
@@ -79,8 +82,8 @@ export default function UnifiedRegister({ role }: UnifiedRegisterProps) {
             return;
         }
 
-        if (role === 'provider' && (!parkingAreaName || !location || !totalSlots)) {
-            Alert.alert('Incomplete', 'Please provide parking area details.');
+        if (role === 'provider' && (!parkingAreaName || !location || !totalSlots || !ownerName || !aadharNumber || !propertyPermitNumber)) {
+            Alert.alert('Incomplete', 'Please provide all parking hub and verification details.');
             return;
         }
 
@@ -106,6 +109,9 @@ export default function UnifiedRegister({ role }: UnifiedRegisterProps) {
                 parkingAreaName: role === 'provider' ? parkingAreaName : undefined,
                 location: role === 'provider' ? location : undefined,
                 totalSlots: role === 'provider' ? (parseInt(totalSlots) || 0) : undefined,
+                ownerName: role === 'provider' ? ownerName : undefined,
+                aadharNumber: role === 'provider' ? aadharNumber : undefined,
+                propertyPermitNumber: role === 'provider' ? propertyPermitNumber : undefined,
             });
 
             setIsLoading(false);
@@ -279,7 +285,7 @@ export default function UnifiedRegister({ role }: UnifiedRegisterProps) {
                                                 className="flex-1 ml-4 font-bold text-gray-900"
                                             />
                                         </View>
-                                        <View className="bg-gray-50 flex-row items-center p-4 rounded-[20px] border border-gray-100">
+                                        <View className="bg-gray-50 flex-row items-center p-4 rounded-[20px] border border-gray-100 mb-3">
                                             <Ionicons name="grid" size={18} color="#94A3B8" />
                                             <TextInput
                                                 placeholder="Initial Total Slots Capacity"
@@ -290,6 +296,55 @@ export default function UnifiedRegister({ role }: UnifiedRegisterProps) {
                                                 className="flex-1 ml-4 font-bold text-gray-900"
                                             />
                                         </View>
+
+                                        <Text className="text-[10px] text-gray-400 font-black mb-2 mt-4 uppercase tracking-widest ml-1">Legal Verification</Text>
+                                        <View className="bg-gray-50 flex-row items-center p-4 rounded-[20px] border border-gray-100 mb-3">
+                                            <Ionicons name="person-circle" size={18} color="#94A3B8" />
+                                            <TextInput
+                                                placeholder="Legal Owner Name"
+                                                placeholderTextColor="#94A3B8"
+                                                value={ownerName}
+                                                onChangeText={setOwnerName}
+                                                className="flex-1 ml-4 font-bold text-gray-900"
+                                            />
+                                        </View>
+                                        <View className="bg-gray-50 flex-row items-center p-4 rounded-[20px] border border-gray-100 mb-3">
+                                            <Ionicons name="card" size={18} color="#94A3B8" />
+                                            <TextInput
+                                                placeholder="Aadhar Card Number (12 Digits)"
+                                                placeholderTextColor="#94A3B8"
+                                                value={aadharNumber}
+                                                onChangeText={setAadharNumber}
+                                                keyboardType="numeric"
+                                                maxLength={12}
+                                                className="flex-1 ml-4 font-bold text-gray-900"
+                                            />
+                                        </View>
+                                        <TouchableOpacity className="bg-blue-50 p-4 rounded-[20px] border border-blue-100 mb-3 flex-row items-center justify-between">
+                                            <View className="flex-row items-center">
+                                                <Ionicons name="image" size={18} color="#3B82F6" />
+                                                <Text className="ml-4 text-blue-600 font-bold">Upload Aadhar Image</Text>
+                                            </View>
+                                            <Ionicons name="cloud-upload" size={18} color="#3B82F6" />
+                                        </TouchableOpacity>
+
+                                        <View className="bg-gray-50 flex-row items-center p-4 rounded-[20px] border border-gray-100 mb-3">
+                                            <Ionicons name="document-text" size={18} color="#94A3B8" />
+                                            <TextInput
+                                                placeholder="Property / Permit Number"
+                                                placeholderTextColor="#94A3B8"
+                                                value={propertyPermitNumber}
+                                                onChangeText={setPropertyPermitNumber}
+                                                className="flex-1 ml-4 font-bold text-gray-900"
+                                            />
+                                        </View>
+                                        <TouchableOpacity className="bg-blue-50 p-4 rounded-[20px] border border-blue-100 mb-3 flex-row items-center justify-between">
+                                            <View className="flex-row items-center">
+                                                <Ionicons name="document-attach" size={18} color="#3B82F6" />
+                                                <Text className="ml-4 text-blue-600 font-bold">Upload Property Permit</Text>
+                                            </View>
+                                            <Ionicons name="cloud-upload" size={18} color="#3B82F6" />
+                                        </TouchableOpacity>
                                     </View>
                                 </>
                             )}

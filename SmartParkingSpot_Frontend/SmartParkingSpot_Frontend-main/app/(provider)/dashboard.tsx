@@ -1,351 +1,250 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
+    Dimensions,
+    RefreshControl,
     ScrollView,
     StatusBar,
     Text,
     TouchableOpacity,
     View,
-    Switch,
+    Alert
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Animated, { FadeInDown, FadeInUp, ZoomIn } from 'react-native-reanimated';
+import axios from 'axios';
 import BASE_URL from '../../constants/api';
 import UnifiedHeader from '../../components/UnifiedHeader';
-import UnifiedSidebar from '../../components/UnifiedSidebar';
-import StatsCard from '../../components/StatsCard';
-import LineChart from '../../components/LineChart';
-import DonutChart from '../../components/DonutChart';
+import { LinearGradient } from 'expo-linear-gradient';
+import { LineChart } from 'react-native-chart-kit';
 
+const { width } = Dimensions.get('window');
 const API = BASE_URL;
 
 export default function ProviderDashboard() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
-    const [sidebarOpen, setSidebarOpen] = useState(false);
-    const [isOnline, setIsOnline] = useState(true);
-    const [isDark, setIsDark] = useState(false);
-    const [summary, setSummary] = useState({
-        totalSlots: 0,
-        activeCars: 0,
-        totalRevenue: 0,
-        occupancyRate: 0,
-        rating: 4.8,
+    const [refreshing, setRefreshing] = useState(false);
+    const [stats, setStats] = useState<any>({
+        summary: {
+            totalRevenue: 0,
+            todayEarnings: 0,
+            monthToDateEarnings: 0,
+            occupancyRate: 0,
+            activeCars: 0,
+            totalSlots: 0,
+            rating: 5.0,
+            totalReviews: 0
+        },
+        revenueTrend: [],
+        recentActivity: [],
+        online: true,
+        providerName: 'Provider'
     });
-    const [recentActivity, setRecentActivity] = useState<any[]>([]);
-    const [revenueTrend, setRevenueTrend] = useState<any[]>([]);
-    const [userName, setUserName] = useState('Provider');
-    const [timeFilter, setTimeFilter] = useState<'WEEK' | 'MONTH' | 'YEAR'>('WEEK');
 
     const providerGradient: readonly [string, string, ...string[]] = ['#8B5CF6', '#6D28D9'];
 
-    const menuItems = [
-        { icon: 'grid', label: 'Dashboard', route: '/(provider)/dashboard' },
-        { icon: 'business', label: 'My Spaces', route: '/(provider)/spaces' },
-        { icon: 'bar-chart', label: 'Earnings', route: '/(provider)/earnings' },
-        { icon: 'car', label: 'Live Traffic', route: '/(provider)/traffic' },
-        { icon: 'time', label: 'History', route: '/(provider)/history' },
-        { icon: 'flash', label: 'Charger Network', route: '/(provider)/ev-station' },
-        { icon: 'person-circle', label: 'Account Profile', route: '/(provider)/profile' },
-        { icon: 'settings', label: 'Settings', route: '/(provider)/settings' },
-        { icon: 'headset', label: 'Support', route: '/(provider)/support' },
-    ];
-
     useEffect(() => {
-        loadDashboardData();
-    }, [timeFilter]);
+        loadDashboard();
+    }, []);
 
-    const loadDashboardData = async () => {
+    const loadDashboard = async () => {
         try {
-            // Load Theme
-            const settingsStr = await AsyncStorage.getItem('admin_settings');
-            if (settingsStr) {
-                const settings = JSON.parse(settingsStr);
-                setIsDark(settings.darkMode ?? false);
+            const token = await AsyncStorage.getItem('token');
+            if (!token) {
+                router.replace('/(provider)');
+                return;
             }
 
-            const token = await AsyncStorage.getItem('token');
-            const name = await AsyncStorage.getItem('userName');
-            if (name) setUserName(name);
-
-            const res = await fetch(`${API}/api/provider/dashboard?timeframe=${timeFilter}`, {
-                headers: { Authorization: `Bearer ${token}` },
+            // Real Data Fetch
+            const response = await axios.get(`${API}/api/provider/dashboard-stats`, {
+                headers: { Authorization: `Bearer ${token}` }
             });
-            if (res.ok) {
-                const data = await res.json();
-                setSummary(data.summary);
-                setRecentActivity(data.recentActivity);
-                setRevenueTrend(data.revenueTrend);
+
+            if (response.status === 200) {
+                setStats(response.data);
             }
         } catch (err) {
-            console.error('Provider dashboard load failed:', err);
+            console.error('Failed to load dashboard', err);
+            // Fallback for demo if API fails
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
     };
 
-    const handleLogout = async () => {
-        await AsyncStorage.clear();
-        router.replace('/' as any);
+    const handleStatusToggle = async (val: boolean) => {
+        try {
+            const token = await AsyncStorage.getItem('token');
+            const response = await axios.put(`${API}/api/provider/status`,
+                { online: val },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            if (response.status === 200) {
+                setStats({ ...stats, online: val });
+                Alert.alert('Protocol Sync', `System is now ${val ? 'Discovery LIVE' : 'OFFLINE'}.`);
+            }
+        } catch (err) {
+            Alert.alert('Sync Error', 'Cloud interface unreachable.');
+        }
     };
 
     if (loading) {
         return (
-            <View className={`flex-1 justify-center items-center ${isDark ? 'bg-slate-950' : 'bg-white'}`}>
-                <ActivityIndicator size="large" color="#8B5CF6" />
-                <Text className="mt-4 text-purple-500 font-bold uppercase tracking-widest text-xs">Syncing Panel...</Text>
+            <View className="flex-1 justify-center items-center bg-white">
+                <ActivityIndicator size="small" color="#8B5CF6" />
+                <Text className="mt-2 text-purple-600 font-bold uppercase tracking-[2px] text-[8px]">Syncing Real-time Flux...</Text>
             </View>
         );
     }
 
     return (
-        <View className={`flex-1 ${isDark ? 'bg-slate-950' : 'bg-gray-50'}`}>
-            <StatusBar barStyle="light-content" />
+        <View className="flex-1 bg-gray-50">
+            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
             <UnifiedHeader
-                title="Provider Hub"
-                subtitle="Parking Management"
+                title="Hub Central"
+                subtitle="DASHBOARD ALPHA"
                 role="provider"
                 gradientColors={providerGradient}
-                onMenuPress={() => setSidebarOpen(true)}
-                userName={userName}
-                notificationCount={1}
+                onMenuPress={() => { }} // Hook Side Drawer here if configured
+                userName={stats.providerName}
+                showStatusToggle={true}
+                isOnline={stats.online}
+                onStatusToggle={handleStatusToggle}
             />
 
-            <UnifiedSidebar
-                isOpen={sidebarOpen}
-                onClose={() => setSidebarOpen(false)}
-                userName={userName}
-                userRole="Parking Provider"
-                userStatus={isOnline ? "Online" : "Offline"}
-                menuItems={menuItems}
-                onLogout={handleLogout}
-                gradientColors={providerGradient}
-                dark={isDark}
-            />
-
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
-                {/* ONLINE TOGGLE - Now at Top for Visibility */}
-                <View className="px-5 mt-6">
-                    <View className={`${isDark ? 'bg-slate-900 border-slate-800 shadow-black' : 'bg-white border-gray-100 shadow-xl shadow-black/5'} rounded-3xl p-5 flex-row items-center justify-between border`}>
-                        <View className="flex-row items-center">
-                            <View className={`w-3 h-3 rounded-full mr-3 ${isOnline ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                            <View>
-                                <Text className={`font-black tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>{isOnline ? 'Station Active' : 'Station Inactive'}</Text>
-                                <Text className="text-gray-500 text-[10px] font-bold uppercase">Visibility: {isOnline ? 'Public' : 'Hidden'}</Text>
-                            </View>
-                        </View>
-                        <Switch
-                            value={isOnline}
-                            onValueChange={setIsOnline}
-                            trackColor={{ false: isDark ? '#1E293B' : '#E2E8F0', true: isDark ? '#4C1D95' : '#D8B4FE' }}
-                            thumbColor={isOnline ? '#8B5CF6' : '#94A3B8'}
-                        />
-                    </View>
-                </View>
-
-                {/* STATS GRID */}
-                <View className="px-5 mt-6">
-                    <View className="flex-row gap-4 mb-4">
-                        <TouchableOpacity
-                            activeOpacity={0.7}
-                            onPress={() => router.push('/(provider)/earnings')}
-                            className="flex-1"
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 60 }}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadDashboard(); }} tintColor="#8B5CF6" />
+                }
+            >
+                {/* COMPACT KPI GRID */}
+                <View className="px-4 mt-4 flex-row flex-wrap justify-between">
+                    {[
+                        { label: 'Total Spots', value: stats.summary.totalSlots, icon: 'grid-outline', color: '#8B5CF6', route: '/(provider)/spaces' },
+                        { label: 'Active Load', value: stats.summary.activeCars, icon: 'car-sport-outline', color: '#10B981', route: '/(provider)/traffic' },
+                        { label: 'Today Yield', value: `₹${stats.summary.todayEarnings.toFixed(0)}`, icon: 'cash-outline', color: '#3B82F6', route: '/(provider)/earnings' },
+                        { label: 'MTD Revenue', value: `₹${stats.summary.monthToDateEarnings.toFixed(0)}`, icon: 'stats-chart-outline', color: '#F59E0B', route: '/(provider)/earnings' },
+                    ].map((widget, i) => (
+                        <Animated.View
+                            key={i}
+                            entering={FadeInDown.delay(i * 50)}
+                            style={{ width: (width - 48) / 2 }}
+                            className="mb-3"
                         >
-                            <StatsCard
-                                icon="wallet"
-                                iconColor="#8B5CF6"
-                                iconBgColor={isDark ? 'bg-purple-500/10' : 'bg-purple-50'}
-                                label="Daily Earnings"
-                                value={`?${summary.totalRevenue.toLocaleString()}`}
-                                dark={isDark}
-                            />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            activeOpacity={0.7}
-                            onPress={() => router.push('/(provider)/ev-station')}
-                            className="flex-1"
-                        >
-                            <StatsCard
-                                icon="battery-charging"
-                                iconColor="#10B981"
-                                iconBgColor={isDark ? 'bg-emerald-500/10' : 'bg-emerald-50'}
-                                label="Active Chargers"
-                                value={`${summary.activeCars}/${summary.totalSlots}`}
-                                dark={isDark}
-                            />
-                        </TouchableOpacity>
-                    </View>
-                    <View className="flex-row gap-4">
-                        <TouchableOpacity
-                            activeOpacity={0.7}
-                            onPress={() => router.push('/(provider)/reviews')}
-                            className="flex-1"
-                        >
-                            <StatsCard
-                                icon="star"
-                                iconColor="#F59E0B"
-                                iconBgColor={isDark ? 'bg-amber-500/10' : 'bg-amber-50'}
-                                label="Avg Rating"
-                                value={`${summary.rating}/5.0`}
-                                dark={isDark}
-                            />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            activeOpacity={0.7}
-                            onPress={() => router.push('/(provider)/traffic')}
-                            className="flex-1"
-                        >
-                            <StatsCard
-                                icon="analytics"
-                                iconColor="#3B82F6"
-                                iconBgColor={isDark ? 'bg-blue-500/10' : 'bg-blue-50'}
-                                label="Occupancy"
-                                value={`${summary.occupancyRate}%`}
-                                dark={isDark}
-                            />
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
-                {/* QUICK ACTIONS */}
-                <View className="px-5 mt-8">
-                    <Text className={`font-black text-lg mb-4 tracking-tight px-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>Quick Commands</Text>
-                    <View className="flex-row gap-3">
-                        <TouchableOpacity
-                            onPress={() => router.push('/(provider)/spaces')}
-                            className={`${isDark ? 'bg-slate-900 border-slate-800 shadow-black' : 'bg-white border-gray-100 shadow-sm'} flex-1 rounded-3xl p-5 items-center border`}
-                        >
-                            <View className={`w-12 h-12 ${isDark ? 'bg-purple-500/10' : 'bg-purple-50'} rounded-2xl items-center justify-center mb-3`}>
-                                <Ionicons name="add-circle" size={26} color="#8B5CF6" />
-                            </View>
-                            <Text className={`font-black text-[10px] uppercase tracking-widest text-center ${isDark ? 'text-slate-300' : 'text-gray-900'}`}>Add Slot</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            onPress={() => router.push('/(provider)/traffic')}
-                            className={`${isDark ? 'bg-slate-900 border-slate-800 shadow-black' : 'bg-white border-gray-100 shadow-sm'} flex-1 rounded-3xl p-5 items-center border`}
-                        >
-                            <View className={`w-12 h-12 ${isDark ? 'bg-blue-500/10' : 'bg-blue-50'} rounded-2xl items-center justify-center mb-3`}>
-                                <Ionicons name="analytics" size={24} color="#3B82F6" />
-                            </View>
-                            <Text className={`font-black text-[10px] uppercase tracking-widest text-center ${isDark ? 'text-slate-300' : 'text-gray-900'}`}>Traffic</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            onPress={() => router.push('/(provider)/earnings')}
-                            className={`${isDark ? 'bg-slate-900 border-slate-800 shadow-black' : 'bg-white border-gray-100 shadow-sm'} flex-1 rounded-3xl p-5 items-center border`}
-                        >
-                            <View className={`w-12 h-12 ${isDark ? 'bg-emerald-500/10' : 'bg-emerald-50'} rounded-2xl items-center justify-center mb-3`}>
-                                <Ionicons name="cash" size={24} color="#10B981" />
-                            </View>
-                            <Text className={`font-black text-[10px] uppercase tracking-widest text-center ${isDark ? 'text-slate-300' : 'text-gray-900'}`}>Payouts</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
-                {/* REVENUE TREND WITH TIME FILTER */}
-                <View className="px-5 mt-8">
-                    <View className="flex-row items-center justify-between mb-4 px-2">
-                        <Text className={`font-black text-lg tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>Revenue Analytics</Text>
-                    </View>
-
-                    <View className={`${isDark ? 'bg-slate-900 border-slate-800 shadow-black' : 'bg-white border-gray-100 shadow-xl shadow-black/5'} rounded-[24px] p-1.5 flex-row border mb-4`}>
-                        {['WEEK', 'MONTH', 'YEAR'].map((r) => (
                             <TouchableOpacity
-                                key={r}
-                                activeOpacity={0.7}
-                                onPress={() => setTimeFilter(r as any)}
-                                className={`flex-1 py-2.5 rounded-2xl ${timeFilter === r ? (isDark ? 'bg-purple-500' : 'bg-purple-600 shadow-lg shadow-purple-500/30') : 'bg-transparent'}`}
+                                onPress={() => router.push(widget.route as any)}
+                                activeOpacity={0.9}
+                                className="bg-white rounded-2xl p-4 border border-purple-50 shadow-sm"
                             >
-                                <Text className={`text-center font-black text-[10px] uppercase tracking-[2px] ${timeFilter === r ? 'text-white' : (isDark ? 'text-slate-500' : 'text-gray-400')}`}>
-                                    {r}
-                                </Text>
+                                <View className="flex-row items-center justify-between mb-2">
+                                    <View style={{ backgroundColor: `${widget.color}15` }} className="w-8 h-8 rounded-lg items-center justify-center">
+                                        <Ionicons name={widget.icon as any} size={16} color={widget.color} />
+                                    </View>
+                                    <Ionicons name="chevron-forward" size={10} color="#CBD5E1" />
+                                </View>
+                                <Text className="text-gray-400 text-[7px] font-black uppercase tracking-[2px] mb-0.5">{widget.label}</Text>
+                                <Text className="text-gray-900 text-xl font-black tracking-tight">{widget.value}</Text>
                             </TouchableOpacity>
-                        ))}
-                    </View>
-
-                    <LineChart
-                        data={revenueTrend && revenueTrend.length > 0 ? revenueTrend : [
-                            { label: 'Mon', value: 0 },
-                            { label: 'Tue', value: 0 },
-                            { label: 'Wed', value: 0 },
-                            { label: 'Thu', value: 0 },
-                            { label: 'Fri', value: 0 },
-                            { label: 'Sat', value: 0 },
-                            { label: 'Sun', value: 0 },
-                        ]}
-                        lineColor="#8B5CF6"
-                        fillColor="#8B5CF6"
-                        title={timeFilter === 'WEEK' ? 'Weekly Earnings' : timeFilter === 'YEAR' ? 'Annual Growth' : 'Monthly Earnings'}
-                        dark={isDark}
-                    />
+                        </Animated.View>
+                    ))}
                 </View>
 
-
-                {/* LIVE ACTIVITY */}
-
-                {/* ECO INFRASTRUCTURE */}
-                <View className="px-5 mt-8">
-                    <View className="flex-row items-center justify-between mb-6 px-2">
-                        <Text className={`font-black text-lg tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>Eco Infrastructure</Text>
-                        <TouchableOpacity onPress={() => router.push('/(provider)/ev-station')}>
-                            <Text className="text-emerald-500 font-bold text-xs uppercase tracking-widest">View Map</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    <TouchableOpacity
-                        onPress={() => router.push('/(provider)/ev-station')}
-                        activeOpacity={0.9}
-                        className={`${isDark ? 'bg-slate-900 border-slate-800 shadow-black' : 'bg-white border-blue-50/50 shadow-xl shadow-blue-500/5'} rounded-[40px] border p-2 relative overflow-hidden`}
-                    >
-                        <DonutChart
-                            title=""
-                            centerLabel="Units"
-                            dark={isDark}
-                            data={[
-                                { label: 'Slow (L1)', value: 40, color: '#10B981' },
-                                { label: 'Medium (L2)', value: 30, color: '#3B82F6' },
-                                { label: 'Rapid (L3)', value: 20, color: '#F59E0B' },
-                                { label: 'Super (S)', value: 10, color: '#EF4444' },
-                            ]}
-                        />
-                        <View className="absolute top-8 right-8">
-                            <Ionicons name="flash" size={20} color="#10B981" />
+                {/* BUSINESS FLOW (LINE CHART MOCKUP) */}
+                <View className="px-4 mt-2">
+                    <Animated.View entering={ZoomIn.delay(200)} className="bg-white rounded-3xl p-5 border border-purple-50 shadow-sm">
+                        <View className="flex-row justify-between items-center mb-4">
+                            <View>
+                                <Text className="text-gray-900 text-base font-black tracking-tight">Business Flow</Text>
+                                <Text className="text-gray-400 text-[7px] font-black uppercase tracking-[2px]">30-Day Revenue Flux</Text>
+                            </View>
                         </View>
+
+                        <View className="items-center">
+                            <LineChart
+                                data={{
+                                    labels: stats.revenueTrend.filter((_: any, idx: number) => idx % 5 === 0).map((d: any) => d.label),
+                                    datasets: [{
+                                        data: stats.revenueTrend.length > 0
+                                            ? stats.revenueTrend.map((d: any) => d.value)
+                                            : [0, 0, 0, 0, 0]
+                                    }]
+                                }}
+                                width={width - 48}
+                                height={160}
+                                yAxisLabel="₹"
+                                yAxisSuffix=""
+                                chartConfig={{
+                                    backgroundColor: '#ffffff',
+                                    backgroundGradientFrom: '#ffffff',
+                                    backgroundGradientTo: '#ffffff',
+                                    decimalPlaces: 0,
+                                    color: (opacity = 1) => `rgba(139, 92, 246, ${opacity})`,
+                                    labelColor: (opacity = 1) => `rgba(148, 163, 184, ${opacity})`,
+                                    style: { borderRadius: 16 },
+                                    propsForDots: { r: "3", strokeWidth: "2", stroke: "#8B5CF6" }
+                                }}
+                                bezier
+                                style={{ borderRadius: 16, paddingRight: 40 }}
+                            />
+                        </View>
+                    </Animated.View>
+                </View>
+
+                {/* SYSTEM HEALTH (CLICKABLE) */}
+                <View className="px-5 mt-6">
+                    <Text className="text-gray-900 text-lg font-black tracking-tight ml-2 mb-4">System Health</Text>
+                    <TouchableOpacity
+                        onPress={() => router.push('/(provider)/performance')}
+                        activeOpacity={0.9}
+                    >
+                        <LinearGradient
+                            colors={['#1F2937', '#111827']}
+                            className="rounded-[40px] p-8 flex-row justify-between items-center shadow-lg shadow-black/20"
+                        >
+                            {[
+                                { label: 'Occupancy', value: `${stats.summary.occupancyRate}%`, icon: 'analytics', color: '#A855F7' },
+                                { label: 'Trust', value: stats.summary.rating.toFixed(1), icon: 'ribbon', color: '#FACC15' },
+                                { label: 'Integrity', value: `${Math.round((stats.summary.rating / 5) * 100)}%`, icon: 'shield-checkmark', color: '#10B981' },
+                            ].map((metric, i) => (
+                                <View key={i} className="items-center">
+                                    <View className="bg-white/5 w-12 h-12 rounded-2xl items-center justify-center mb-3">
+                                        <Ionicons name={metric.icon as any} size={22} color={metric.color} />
+                                    </View>
+                                    <Text className="text-white text-xl font-black">{metric.value}</Text>
+                                    <Text className="text-white/30 text-[7px] font-black uppercase tracking-[2px] mt-1">{metric.label}</Text>
+                                </View>
+                            ))}
+                            <Ionicons name="chevron-forward" size={16} color="white" style={{ opacity: 0.2 }} />
+                        </LinearGradient>
                     </TouchableOpacity>
                 </View>
 
-                {/* TODAY'S ACTIVITY */}
-
-                <View className="px-5 mt-8">
-                    <View className="flex-row items-center justify-between mb-4 px-2">
-                        <Text className={`font-black text-lg tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>Today's Activity</Text>
-                        <TouchableOpacity onPress={() => router.push('/(provider)/history')}>
-                            <Text className="text-purple-600 font-bold text-xs uppercase tracking-widest">See All</Text>
-                        </TouchableOpacity>
-                    </View>
-                    {recentActivity.map((activity, index) => (
-                        <View key={index} className={`${isDark ? 'bg-slate-900 border-slate-800 shadow-black' : 'bg-white border-gray-100 shadow-sm'} rounded-2xl p-4 mb-3 flex-row items-center border`}>
-                            <View className={`w-12 h-12 ${activity.type === 'check-in' ? (isDark ? 'bg-emerald-500/10' : 'bg-emerald-50') : (isDark ? 'bg-blue-500/10' : 'bg-blue-50')} rounded-xl items-center justify-center mr-4`}>
-                                <Ionicons
-                                    name={activity.type === 'check-in' ? "log-in" : "log-out"}
-                                    size={24}
-                                    color={activity.type === 'check-in' ? "#10B981" : "#3B82F6"}
-                                />
+                {/* QUICK SUPPORT */}
+                <View className="px-5 mt-6">
+                    <TouchableOpacity
+                        onPress={() => router.push('/(provider)/support' as any)}
+                        activeOpacity={0.8}
+                        className="bg-white rounded-[32px] p-6 border border-purple-50 flex-row items-center justify-between"
+                    >
+                        <View className="flex-row items-center">
+                            <View className="bg-purple-50 w-12 h-12 rounded-2xl items-center justify-center mr-4">
+                                <Ionicons name="headset" size={24} color="#8B5CF6" />
                             </View>
-                            <View className="flex-1">
-                                <Text className={`font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>{activity.slotCode}</Text>
-                                <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">{activity.time} � {activity.customerName}</Text>
+                            <View>
+                                <Text className="text-gray-900 font-black text-base tracking-tight">Concierge Access</Text>
+                                <Text className="text-gray-400 text-[8px] font-black uppercase tracking-[2px]">Real-time assistance</Text>
                             </View>
-                            <Text className={`font-black ${activity.type === 'check-in' ? 'text-emerald-500' : 'text-blue-500'}`}>
-                                {activity.type === 'check-in' ? 'IN' : 'OUT'}
-                            </Text>
                         </View>
-                    ))}
+                        <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+                    </TouchableOpacity>
                 </View>
+
             </ScrollView>
         </View>
     );

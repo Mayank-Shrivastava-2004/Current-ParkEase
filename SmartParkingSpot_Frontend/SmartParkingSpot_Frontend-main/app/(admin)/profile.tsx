@@ -11,13 +11,16 @@ import {
     TouchableOpacity,
     View,
     Modal,
+    Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import UnifiedHeader from '../../components/UnifiedHeader';
 import UnifiedSidebar from '../../components/UnifiedSidebar';
 
-const API = 'http://10.67.158.172:8080';
+import BASE_URL from '../../constants/api';
+
+const API = BASE_URL;
 
 /* ===== AUDIT TRAILS MODAL ===== */
 function AuditTrailsModal({ visible, onClose }: { visible: boolean, onClose: () => void }) {
@@ -93,13 +96,19 @@ export default function AdminProfileScreen() {
     const [auditVisible, setAuditVisible] = useState(false);
     const [isDark, setIsDark] = useState(false);
     const [profile, setProfile] = useState<any>({
-        name: 'Root Admin',
-        email: '...',
-        phone: '...',
-        address: '...',
+        name: 'System Analyst',
+        email: 'Loading...',
+        phone: 'Loading...',
+        address: 'Loading...',
         role: 'ADMIN',
+        supportHotline: '+91-XXXXXXXXXX'
     });
-    const [editedProfile, setEditedProfile] = useState<any>({});
+    const [editedProfile, setEditedProfile] = useState<any>({
+        name: '',
+        email: '',
+        phone: '',
+        address: '',
+    });
 
     const adminGradient: readonly [string, string, ...string[]] = ['#4F46E5', '#312E81'];
 
@@ -108,7 +117,9 @@ export default function AdminProfileScreen() {
         { icon: 'people', label: 'Manage Drivers', route: '/(admin)/drivers' },
         { icon: 'business', label: 'Manage Providers', route: '/(admin)/providers' },
         { icon: 'alert-circle', label: 'Disputes', route: '/(admin)/disputes' },
+        { icon: 'notifications', label: 'Notifications', route: '/(admin)/notifications' },
         { icon: 'bar-chart', label: 'Analytics', route: '/(admin)/analytics' },
+        { icon: 'person-circle', label: 'Account Profile', route: '/(admin)/profile' },
         { icon: 'settings', label: 'Settings', route: '/(admin)/settings' },
     ];
 
@@ -136,9 +147,16 @@ export default function AdminProfileScreen() {
                 if (data.name) {
                     await AsyncStorage.setItem('userName', data.name);
                 }
+                if (data.role) {
+                    await AsyncStorage.setItem('userRole', data.role);
+                }
+            } else {
+                const errorData = await res.text();
+                Alert.alert('System Error', `Failed to synchronize data (Status: ${res.status}). ${errorData}`);
             }
         } catch (err) {
             console.error('Profile load failed:', err);
+            Alert.alert('Connection Error', 'Could not establish a link to the backend server. Please check your network IP.');
         } finally {
             setLoading(false);
         }
@@ -147,7 +165,9 @@ export default function AdminProfileScreen() {
     const saveProfile = async () => {
         try {
             const token = await AsyncStorage.getItem('token');
-            const res = await fetch(`${API}/api/profile`, {
+
+            // 1. Update Profile Details
+            const res = await fetch(`${API}/api/admin/update-profile`, {
                 method: 'PUT',
                 headers: {
                     Authorization: `Bearer ${token}`,
@@ -155,6 +175,28 @@ export default function AdminProfileScreen() {
                 },
                 body: JSON.stringify(editedProfile),
             });
+
+            // 2. Handle Password Change if provided
+            if (editedProfile.currentPassword && editedProfile.newPassword) {
+                const passRes = await fetch(`${API}/api/profile/change-password`, {
+                    method: 'PUT',
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        currentPassword: editedProfile.currentPassword,
+                        newPassword: editedProfile.newPassword
+                    }),
+                });
+
+                if (!passRes.ok) {
+                    const error = await passRes.json();
+                    Alert.alert('Security Alert', error.message || 'Failed to update password');
+                    return;
+                }
+            }
+
             if (res.ok) {
                 setProfile(editedProfile);
                 setEditMode(false);
@@ -212,10 +254,18 @@ export default function AdminProfileScreen() {
                 {/* PROFILE HERO */}
                 <View className="px-5 mt-6">
                     <View className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-indigo-50'} rounded-[40px] p-8 shadow-2xl shadow-black/5 border items-center`}>
-                        <View className={`w-28 h-28 ${isDark ? 'bg-indigo-500/10' : 'bg-indigo-50'} rounded-[40px] items-center justify-center mb-6 relative`}>
-                            <Text className="text-indigo-500 text-5xl font-black">
-                                {profile.name?.charAt(0).toUpperCase() || 'A'}
-                            </Text>
+                        <View className={`w-28 h-28 ${isDark ? 'bg-indigo-500/10' : 'bg-indigo-50'} rounded-[40px] items-center justify-center mb-6 relative overflow-hidden`}>
+                            {profile.profileImage ? (
+                                <Image
+                                    source={{ uri: profile.profileImage }}
+                                    className="w-full h-full"
+                                    resizeMode="cover"
+                                />
+                            ) : (
+                                <Text className="text-indigo-500 text-5xl font-black">
+                                    {profile.name?.charAt(0).toUpperCase() || 'A'}
+                                </Text>
+                            )}
                             <TouchableOpacity
                                 className="absolute -bottom-1 -right-1 w-9 h-9 bg-indigo-600 rounded-2xl items-center justify-center border-4 border-slate-900 shadow-lg"
                             >
@@ -223,7 +273,7 @@ export default function AdminProfileScreen() {
                             </TouchableOpacity>
                         </View>
                         <Text className={`${isDark ? 'text-white' : 'text-gray-900'} text-3xl font-black tracking-tight`}>{profile.name}</Text>
-                        <Text className="text-gray-500 text-[10px] font-black uppercase tracking-[4px] mt-2">{profile.role}</Text>
+                        <Text className="text-gray-500 text-[10px] font-black uppercase tracking-[4px] mt-2">{profile.role || 'Super Admin'}</Text>
                     </View>
                 </View>
 
@@ -250,8 +300,9 @@ export default function AdminProfileScreen() {
                     {[
                         { label: 'Operational Name', value: editedProfile.name, key: 'name', icon: 'person' },
                         { label: 'Secure Email', value: editedProfile.email, key: 'email', icon: 'mail' },
-                        { label: 'System Hotline', value: editedProfile.phone, key: 'phone', icon: 'call' },
+                        { label: 'System Hotline', value: profile.supportHotline, key: 'phone', icon: 'call' },
                         { label: 'Command Station', value: editedProfile.address, key: 'address', icon: 'location' },
+                        { label: 'Profile Image URL', value: editedProfile.profileImage, key: 'profileImage', icon: 'image' },
                     ].map((field, i) => (
                         <View key={i} className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-100'} rounded-[32px] p-6 mb-4 border shadow-sm flex-row items-center`}>
                             <View className={`w-12 h-12 ${isDark ? 'bg-slate-800' : 'bg-gray-50'} rounded-2xl items-center justify-center mr-5`}>
@@ -268,7 +319,7 @@ export default function AdminProfileScreen() {
                                         placeholderTextColor={isDark ? "#475569" : "#CBD5E1"}
                                     />
                                 ) : (
-                                    <Text className={`${isDark ? 'text-white' : 'text-gray-900'} font-black text-base`}>{field.value || 'NOT_CONFIGURED'}</Text>
+                                    <Text className={`${isDark ? 'text-white' : 'text-gray-900'} font-black text-base`} numberOfLines={1}>{field.value || 'NOT_CONFIGURED'}</Text>
                                 )}
                             </View>
                             {field.key === 'email' && (
@@ -278,6 +329,35 @@ export default function AdminProfileScreen() {
                             )}
                         </View>
                     ))}
+
+                    {/* PASSWORD UPDATE SECTION */}
+                    {editMode && (
+                        <View className="mt-6 mb-10">
+                            <Text className={`font-black text-lg mb-4 ml-2 ${isDark ? 'text-slate-400' : 'text-gray-700'}`}>Security Credentials</Text>
+
+                            <View className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-100'} rounded-[32px] p-6 mb-4 border shadow-sm`}>
+                                <Text className="text-gray-500 text-[8px] font-black uppercase tracking-widest mb-1">Current Password</Text>
+                                <TextInput
+                                    className={`${isDark ? 'text-white' : 'text-gray-900'} font-black text-base p-0`}
+                                    placeholder="••••••••"
+                                    placeholderTextColor={isDark ? "#475569" : "#CBD5E1"}
+                                    secureTextEntry
+                                    onChangeText={(t) => setEditedProfile({ ...editedProfile, currentPassword: t })}
+                                />
+                            </View>
+
+                            <View className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-100'} rounded-[32px] p-6 border shadow-sm`}>
+                                <Text className="text-gray-500 text-[8px] font-black uppercase tracking-widest mb-1">New Password</Text>
+                                <TextInput
+                                    className={`${isDark ? 'text-white' : 'text-gray-900'} font-black text-base p-0`}
+                                    placeholder="••••••••"
+                                    placeholderTextColor={isDark ? "#475569" : "#CBD5E1"}
+                                    secureTextEntry
+                                    onChangeText={(t) => setEditedProfile({ ...editedProfile, newPassword: t })}
+                                />
+                            </View>
+                        </View>
+                    )}
                 </View>
 
                 {/* SYSTEM LOGS ACTION */}

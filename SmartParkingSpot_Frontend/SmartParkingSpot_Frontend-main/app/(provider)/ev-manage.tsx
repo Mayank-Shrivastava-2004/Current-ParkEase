@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -16,10 +15,8 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import UnifiedHeader from '../../components/UnifiedHeader';
-import UnifiedSidebar from '../../components/UnifiedSidebar';
-import BASE_URL from '../../constants/api';
-
-const API = BASE_URL;
+import Animated, { FadeInUp, ZoomIn } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface EVCharger {
     id: string;
@@ -35,9 +32,7 @@ interface EVCharger {
 export default function EVManagementScreen() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
-    const [sidebarOpen, setSidebarOpen] = useState(false);
     const [userName, setUserName] = useState('Provider');
-    const [isDark, setIsDark] = useState(false);
     const [chargers, setChargers] = useState<EVCharger[]>([]);
     const [showAddModal, setShowAddModal] = useState(false);
     const [editingCharger, setEditingCharger] = useState<EVCharger | null>(null);
@@ -46,47 +41,23 @@ export default function EVManagementScreen() {
         type: 'Medium',
         power: 22,
         location: '',
-        pricePerKwh: 8,
+        pricePerKwh: 12,
         status: 'Active',
         enabled: true,
     });
 
     const providerGradient: readonly [string, string, ...string[]] = ['#10B981', '#047857'];
 
-    const menuItems = [
-        { icon: 'grid', label: 'Dashboard', route: '/(provider)/dashboard' },
-        { icon: 'business', label: 'My Spaces', route: '/(provider)/spaces' },
-        { icon: 'bar-chart', label: 'Earnings', route: '/(provider)/earnings' },
-        { icon: 'car', label: 'Live Traffic', route: '/(provider)/traffic' },
-        { icon: 'time', label: 'History', route: '/(provider)/history' },
-        { icon: 'flash', label: 'EV Station', route: '/(provider)/ev-station' },
-        { icon: 'person-circle', label: 'Account Profile', route: '/(provider)/profile' },
-        { icon: 'settings', label: 'Settings', route: '/(provider)/settings' },
-        { icon: 'headset', label: 'Support', route: '/(provider)/support' },
-    ];
-
-    useEffect(() => {
-        loadChargers();
-    }, []);
-
     const loadChargers = async () => {
         try {
-            const settingsStr = await AsyncStorage.getItem('admin_settings');
-            if (settingsStr) {
-                const settings = JSON.parse(settingsStr);
-                setIsDark(settings.darkMode ?? false);
-            }
-
-            const token = await AsyncStorage.getItem('token');
             const name = await AsyncStorage.getItem('userName');
             if (name) setUserName(name);
 
-            // Mock data with new types
+            // Mock Data - In a real app this would be an API call
             const mockChargers: EVCharger[] = [
-                { id: 'EV-01', name: 'Charger Alpha', type: 'Super Charge', power: 150, status: 'Active', location: 'Section A1', pricePerKwh: 15, enabled: true },
-                { id: 'EV-02', name: 'Charger Beta', type: 'Rapid', power: 50, status: 'In Use', location: 'Section B2', pricePerKwh: 12, enabled: true },
-                { id: 'EV-03', name: 'Charger Gamma', type: 'Medium', power: 22, status: 'Active', location: 'Section C3', pricePerKwh: 8, enabled: true },
-                { id: 'EV-04', name: 'Charger Delta', type: 'Slow', power: 7, status: 'Inactive', location: 'Section D4', pricePerKwh: 5, enabled: false },
+                { id: 'EV-01', name: 'Ultra-Charge Alpha', type: 'Super Charge', power: 150, status: 'Active', location: 'Wing A, L1', pricePerKwh: 15, enabled: true },
+                { id: 'EV-02', name: 'Rapid Unit Beta', type: 'Rapid', power: 50, status: 'In Use', location: 'Wing B, Main', pricePerKwh: 12, enabled: true },
+                { id: 'EV-03', name: 'Standard Flow Unit', type: 'Medium', power: 22, status: 'Active', location: 'Wing C, L2', pricePerKwh: 8, enabled: true },
             ];
             setChargers(mockChargers);
         } catch (err) {
@@ -96,64 +67,9 @@ export default function EVManagementScreen() {
         }
     };
 
-    const handleAddCharger = () => {
-        if (!formData.name || !formData.location) {
-            Alert.alert('Error', 'Please fill all required fields');
-            return;
-        }
-
-        const newCharger: EVCharger = {
-            id: `EV-${String(chargers.length + 1).padStart(2, '0')}`,
-            name: formData.name!,
-            type: formData.type!,
-            power: formData.power!,
-            status: formData.enabled ? 'Active' : 'Inactive',
-            location: formData.location!,
-            pricePerKwh: formData.pricePerKwh!,
-            enabled: formData.enabled!,
-        };
-
-        setChargers([...chargers, newCharger]);
-        setShowAddModal(false);
-        resetForm();
-        Alert.alert('Success', 'EV Charger added');
-    };
-
-    const handleUpdateCharger = () => {
-        if (!editingCharger) return;
-
-        const updated = chargers.map(c =>
-            c.id === editingCharger.id ? { ...c, ...formData, status: formData.enabled ? 'Active' : 'Inactive' } as EVCharger : c
-        );
-        setChargers(updated);
-        setEditingCharger(null);
-        resetForm();
-        Alert.alert('Success', 'Configuration updated');
-    };
-
-    const handleDeleteCharger = (id: string) => {
-        Alert.alert(
-            'Decommission Charger',
-            'Are you sure you want to remove this unit?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Remove',
-                    style: 'destructive',
-                    onPress: () => {
-                        setChargers(chargers.filter(c => c.id !== id));
-                    },
-                },
-            ]
-        );
-    };
-
-    const toggleChargerStatus = (id: string) => {
-        const updated = chargers.map(c =>
-            c.id === id ? { ...c, enabled: !c.enabled, status: (!c.enabled ? 'Active' : 'Inactive') as EVCharger['status'] } : c
-        );
-        setChargers(updated);
-    };
+    useEffect(() => {
+        loadChargers();
+    }, []);
 
     const resetForm = () => {
         setFormData({
@@ -161,293 +77,222 @@ export default function EVManagementScreen() {
             type: 'Medium',
             power: 22,
             location: '',
-            pricePerKwh: 8,
+            pricePerKwh: 12,
             status: 'Active',
             enabled: true,
         });
+        setEditingCharger(null);
     };
 
-    const openEditModal = (charger: EVCharger) => {
-        setEditingCharger(charger);
-        setFormData(charger);
-    };
-
-    const handleLogout = async () => {
-        await AsyncStorage.clear();
-        router.replace('/' as any);
-    };
-
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'Active': return '#10B981';
-            case 'In Use': return '#3B82F6';
-            case 'Maintenance': return '#F59E0B';
-            case 'Inactive': return '#94A3B8';
-            default: return '#94A3B8';
+    const handleSaveCharger = () => {
+        if (!formData.name || !formData.location) {
+            Alert.alert('Incomplete Protocol', 'Please fill all required diagnostic fields');
+            return;
         }
+
+        if (editingCharger) {
+            setChargers(prev => prev.map(c => c.id === editingCharger.id ? { ...c, ...formData } as EVCharger : c));
+        } else {
+            const newCharger: EVCharger = {
+                id: `EV-${String(chargers.length + 1).padStart(2, '0')}`,
+                name: formData.name!,
+                type: formData.type!,
+                power: formData.power!,
+                status: 'Active',
+                location: formData.location!,
+                pricePerKwh: formData.pricePerKwh!,
+                enabled: true,
+            };
+            setChargers(prev => [...prev, newCharger]);
+        }
+        setShowAddModal(false);
+        resetForm();
+    };
+
+    const toggleCharger = (id: string) => {
+        setChargers(prev => prev.map(c =>
+            c.id === id ? { ...c, enabled: !c.enabled, status: !c.enabled ? 'Active' : 'Inactive' } : c
+        ));
     };
 
     if (loading) {
         return (
-            <View className={`flex-1 justify-center items-center ${isDark ? 'bg-slate-950' : 'bg-white'}`}>
+            <View className="flex-1 justify-center items-center bg-white">
                 <ActivityIndicator size="large" color="#10B981" />
-                <Text className="mt-4 text-emerald-600 font-bold uppercase tracking-widest text-xs">Accessing Grid...</Text>
+                <Text className="mt-4 text-emerald-600 font-bold uppercase tracking-widest text-xs">Accessing Smart Grid...</Text>
             </View>
         );
     }
 
     return (
-        <View className={`flex-1 ${isDark ? 'bg-slate-950' : 'bg-gray-50'}`}>
-            <StatusBar barStyle="light-content" />
+        <View className="flex-1 bg-gray-50">
+            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
             <UnifiedHeader
                 title="Charger Network"
-                subtitle="Energy Management System"
+                subtitle="High-Voltage Asset Control"
                 role="provider"
-                gradientColors={['#059669', '#10B981']}
-                onMenuPress={() => setSidebarOpen(true)}
+                gradientColors={providerGradient}
+                onMenuPress={() => { }}
                 userName={userName}
                 showBackButton={true}
             />
 
-            <UnifiedSidebar
-                isOpen={sidebarOpen}
-                onClose={() => setSidebarOpen(false)}
-                userName={userName}
-                userRole="Parking Provider"
-                userStatus="Clean Energy Feed"
-                menuItems={menuItems}
-                onLogout={handleLogout}
-                gradientColors={providerGradient}
-                dark={isDark}
-            />
-
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
-                {/* GLOBAL METRICS */}
-                <View className="px-5 mt-6">
-                    <View className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-emerald-50'} rounded-[40px] p-8 shadow-2xl border`}>
-                        <View className="flex-row justify-between">
-                            <View className="items-center flex-1">
-                                <Text className="text-emerald-500 text-3xl font-black">{chargers.filter(c => c.enabled).length}</Text>
-                                <Text className="text-gray-500 text-[10px] font-black uppercase mt-1">Active</Text>
-                            </View>
-                            <View className={`w-[1px] h-10 ${isDark ? 'bg-slate-700' : 'bg-gray-100'}`} />
-                            <View className="items-center flex-1">
-                                <Text className="text-blue-500 text-3xl font-black">{chargers.filter(c => c.status === 'In Use').length}</Text>
-                                <Text className="text-gray-500 text-[10px] font-black uppercase mt-1">In Use</Text>
-                            </View>
-                            <View className={`w-[1px] h-10 ${isDark ? 'bg-slate-700' : 'bg-gray-100'}`} />
-                            <View className="items-center flex-1">
-                                <Text className={`text-3xl font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>{chargers.length}</Text>
-                                <Text className="text-gray-500 text-[10px] font-black uppercase mt-1">Total</Text>
-                            </View>
-                        </View>
-                    </View>
-                </View>
-
-                {/* PROVISION BUTTON */}
-                <View className="px-5 mt-6">
-                    <TouchableOpacity
-                        activeOpacity={0.8}
-                        onPress={() => setShowAddModal(true)}
-                        className="bg-emerald-600 rounded-[35px] p-6 flex-row items-center justify-center shadow-lg shadow-emerald-500/30"
-                    >
-                        <Ionicons name="add-circle" size={24} color="white" />
-                        <Text className="text-white font-black text-sm ml-3 uppercase tracking-[2px]">Provision New Charger</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* ASSET GRID */}
-                <View className="px-5 mt-10">
-                    <View className="flex-row items-center justify-between mb-8 px-2">
-                        <View className="flex-row items-center">
-                            <View className={`w-2 h-8 ${isDark ? 'bg-emerald-500' : 'bg-emerald-600'} rounded-full mr-4`} />
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
+                {/* GRID OVERVIEW */}
+                <View className="px-6 -mt-12">
+                    <Animated.View entering={ZoomIn} className="bg-white rounded-[60px] p-12 shadow-2xl shadow-emerald-900/10 border border-white">
+                        <View className="flex-row justify-between items-center mb-10">
                             <View>
-                                <Text className={`font-black text-2xl tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>Unit Inventory</Text>
-                                <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-[2px]">Deployed Hardware</Text>
+                                <Text className="text-gray-400 text-[10px] font-black uppercase tracking-[3px]">Total Grid Capacity</Text>
+                                <Text className="text-4xl font-black text-gray-900 tracking-tighter mt-1">{chargers.reduce((acc, c) => acc + c.power, 0)} kW</Text>
+                            </View>
+                            <View className="w-20 h-20 bg-emerald-50 rounded-[28px] items-center justify-center">
+                                <Ionicons name="flash" size={40} color="#10B981" />
                             </View>
                         </View>
+
+                        <View className="flex-row gap-6">
+                            <View className="flex-1 bg-gray-50 p-6 rounded-[35px] border border-gray-100">
+                                <Text className="text-emerald-500 text-2xl font-black tracking-tight">{chargers.filter(c => c.enabled).length}</Text>
+                                <Text className="text-gray-400 text-[8px] font-black uppercase mt-1">Online Units</Text>
+                            </View>
+                            <View className="flex-1 bg-gray-50 p-6 rounded-[35px] border border-gray-100">
+                                <Text className="text-blue-500 text-2xl font-black tracking-tight">{chargers.filter(c => c.status === 'In Use').length}</Text>
+                                <Text className="text-gray-400 text-[8px] font-black uppercase mt-1">Active Loads</Text>
+                            </View>
+                        </View>
+
                         <TouchableOpacity
                             onPress={() => setShowAddModal(true)}
-                            className={`w-12 h-12 rounded-2xl ${isDark ? 'bg-emerald-500/20' : 'bg-emerald-600'} items-center justify-center`}
+                            activeOpacity={0.9}
+                            className="bg-emerald-600 mt-10 p-7 rounded-[35px] flex-row items-center justify-center shadow-xl shadow-emerald-600/30"
                         >
-                            <Ionicons name="add" size={28} color="white" />
+                            <Ionicons name="add-circle" size={24} color="white" />
+                            <Text className="text-white font-black uppercase tracking-[3px] text-xs ml-3">Deploy New Asset</Text>
                         </TouchableOpacity>
-                    </View>
-                    {chargers.map((charger) => {
-                        const sColor = getStatusColor(charger.status);
-                        return (
-                            <View key={charger.id} className={`${isDark ? 'bg-slate-900 border-slate-800 shadow-black' : 'bg-white border-gray-100'} rounded-[35px] p-7 mb-5 border shadow-sm`}>
-                                <View className="flex-row items-start justify-between mb-6">
+                    </Animated.View>
+                </View>
+
+                {/* ASSET LIST */}
+                <View className="px-8 mt-16">
+                    <Text className="font-black text-3xl tracking-tighter mb-10 text-gray-900 px-2">Deployed Hardware</Text>
+                    {chargers.map((charger, index) => (
+                        <Animated.View key={charger.id} entering={FadeInUp.delay(index * 100)}>
+                            <View className="bg-white rounded-[45px] p-10 mb-8 shadow-sm border border-white">
+                                <View className="flex-row justify-between items-start mb-10">
                                     <View className="flex-1">
                                         <View className="flex-row items-center">
-                                            <Text className={`text-xl font-black ${isDark ? 'text-white' : 'text-gray-900'}`}>{charger.name}</Text>
-                                            <View className={`ml-3 px-3 py-1 rounded-full ${isDark ? 'bg-slate-800' : 'bg-gray-50'}`}>
-                                                <Text style={{ color: sColor }} className="text-[8px] font-black uppercase tracking-widest">{charger.status}</Text>
+                                            <Text className="text-2xl font-black text-gray-900 tracking-tight">{charger.name}</Text>
+                                            <View className={`ml-4 px-3 py-1.5 rounded-full ${charger.status === 'Active' ? 'bg-emerald-50' : 'bg-gray-100'}`}>
+                                                <Text className={`text-[8px] font-black uppercase tracking-widest ${charger.status === 'Active' ? 'text-emerald-600' : 'text-gray-400'}`}>{charger.status}</Text>
                                             </View>
                                         </View>
-                                        <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-[2px] mt-1">{charger.id} • {charger.type}</Text>
+                                        <Text className="text-gray-400 text-[10px] font-black uppercase tracking-[3px] mt-2">{charger.id} • {charger.type}</Text>
                                     </View>
+                                    <Switch
+                                        value={charger.enabled}
+                                        onValueChange={() => toggleCharger(charger.id)}
+                                        trackColor={{ false: '#E2E8F0', true: '#D1FAE5' }}
+                                        thumbColor={charger.enabled ? '#10B981' : '#94A3B8'}
+                                        style={{ transform: [{ scaleX: 1.2 }, { scaleY: 1.2 }] }}
+                                    />
+                                </View>
+
+                                <View className="bg-gray-50 rounded-[35px] p-8 mb-8 flex-row justify-between border border-gray-100/50">
+                                    <View>
+                                        <Text className="text-gray-400 text-[8px] font-black uppercase tracking-[3px] mb-2">Yield Rate</Text>
+                                        <Text className="text-xl font-black text-gray-900">₹{charger.pricePerKwh}<Text className="text-xs text-gray-400">/kWh</Text></Text>
+                                    </View>
+                                    <View className="w-[1px] h-full bg-gray-200" />
+                                    <View>
+                                        <Text className="text-gray-400 text-[8px] font-black uppercase tracking-[3px] mb-2">Power</Text>
+                                        <Text className="text-xl font-black text-gray-900">{charger.power} kW</Text>
+                                    </View>
+                                    <View className="w-[1px] h-full bg-gray-200" />
                                     <View className="items-end">
-                                        <Switch
-                                            value={charger.enabled}
-                                            onValueChange={() => toggleChargerStatus(charger.id)}
-                                            trackColor={{ false: isDark ? '#1E293B' : '#E2E8F0', true: '#D1FAE5' }}
-                                            thumbColor={charger.enabled ? '#10B981' : '#94A3B8'}
-                                        />
-                                        <Text className="text-gray-400 text-[8px] font-black mt-1 uppercase">{charger.enabled ? 'ACTIVE' : 'INACTIVE'}</Text>
+                                        <Text className="text-gray-400 text-[8px] font-black uppercase tracking-[3px] mb-2">Node</Text>
+                                        <Text className="text-xl font-black text-gray-900">{charger.location}</Text>
                                     </View>
                                 </View>
 
-                                <View className={`${isDark ? 'bg-slate-800' : 'bg-gray-50'} rounded-[28px] p-5 mb-6 flex-row justify-between`}>
-                                    <View>
-                                        <Text className="text-gray-500 text-[8px] font-black uppercase tracking-widest">Power Output</Text>
-                                        <Text className={`text-base font-black mt-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{charger.power} kW</Text>
-                                    </View>
-                                    <View className={`w-[1px] h-full ${isDark ? 'bg-slate-700' : 'bg-gray-200'}`} />
-                                    <View>
-                                        <Text className="text-gray-500 text-[8px] font-black uppercase tracking-widest">Rate (kWh)</Text>
-                                        <Text className={`text-base font-black mt-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>₹{charger.pricePerKwh}</Text>
-                                    </View>
-                                    <View className={`w-[1px] h-full ${isDark ? 'bg-slate-700' : 'bg-gray-200'}`} />
-                                    <View>
-                                        <Text className="text-gray-500 text-[8px] font-black uppercase tracking-widest">Placement</Text>
-                                        <Text className={`text-base font-black mt-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{charger.location}</Text>
-                                    </View>
-                                </View>
-
-                                <View className="flex-row gap-4">
+                                <View className="flex-row gap-5">
                                     <TouchableOpacity
-                                        activeOpacity={0.7}
-                                        onPress={() => openEditModal(charger)}
-                                        className={`flex-1 ${isDark ? 'bg-emerald-500/10' : 'bg-emerald-50'} rounded-2xl py-4 items-center`}
+                                        onPress={() => { setEditingCharger(charger); setFormData(charger); setShowAddModal(true); }}
+                                        className="flex-1 bg-emerald-50 py-6 rounded-[30px] items-center border border-emerald-100"
                                     >
-                                        <Text className="text-emerald-600 font-black text-xs uppercase tracking-widest">Manage</Text>
+                                        <Text className="text-emerald-600 font-black uppercase tracking-[3px] text-[10px]">Configure</Text>
                                     </TouchableOpacity>
-                                    <TouchableOpacity
-                                        activeOpacity={0.7}
-                                        onPress={() => handleDeleteCharger(charger.id)}
-                                        className={`flex-1 ${isDark ? 'bg-rose-500/10' : 'bg-rose-50'} rounded-2xl py-4 items-center`}
-                                    >
-                                        <Text className="text-rose-600 font-black text-xs uppercase tracking-widest">Decommission</Text>
+                                    <TouchableOpacity className="flex-1 bg-gray-50 py-6 rounded-[30px] items-center border border-gray-100">
+                                        <Text className="text-gray-400 font-black uppercase tracking-[3px] text-[10px]">Diagnostics</Text>
                                     </TouchableOpacity>
                                 </View>
                             </View>
-                        );
-                    })}
+                        </Animated.View>
+                    ))}
                 </View>
             </ScrollView>
 
-            {/* CONFIGURATION MODAL */}
-            <Modal
-                visible={showAddModal || editingCharger !== null}
-                animationType="slide"
-                transparent={true}
-                onRequestClose={() => {
-                    setShowAddModal(false);
-                    setEditingCharger(null);
-                    resetForm();
-                }}
-            >
-                <View className="flex-1 bg-black/60 justify-end">
-                    <View className={`${isDark ? 'bg-slate-900' : 'bg-white'} rounded-t-[50px] p-10`}>
-                        <View className="flex-row items-center justify-between mb-8">
-                            <Text className={`text-3xl font-black tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                                {editingCharger ? 'Unit Config' : 'New Unit'}
-                            </Text>
-                            <TouchableOpacity onPress={() => {
-                                setShowAddModal(false);
-                                setEditingCharger(null);
-                                resetForm();
-                            }}>
-                                <Ionicons name="close-circle" size={36} color="#94A3B8" />
-                            </TouchableOpacity>
+            {/* DEPLOYMENT MODAL */}
+            <Modal visible={showAddModal} transparent animationType="slide" statusBarTranslucent>
+                <View className="flex-1 bg-black/80 justify-end">
+                    <TouchableOpacity activeOpacity={1} className="flex-1" onPress={() => setShowAddModal(false)} />
+                    <Animated.View entering={FadeInUp} className="bg-white rounded-t-[70px] p-12 pb-20">
+                        <View className="w-20 h-1.5 rounded-full self-center mb-12 bg-gray-100" />
+
+                        <Text className="text-5xl font-black mb-10 text-gray-900 tracking-tighter">
+                            {editingCharger ? 'Unit Config' : 'Deploy Asset'}
+                        </Text>
+
+                        <View className="mb-10">
+                            <Text className="text-gray-400 text-[10px] font-black uppercase tracking-[4px] mb-4 ml-6">Unit Designation</Text>
+                            <TextInput
+                                className="bg-gray-50 rounded-[35px] p-8 border border-gray-100 font-black text-xl text-gray-900"
+                                placeholder="Designation Name"
+                                value={formData.name}
+                                onChangeText={text => setFormData({ ...formData, name: text })}
+                            />
                         </View>
 
-                        <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 550 }}>
-                            {/* Identity */}
-                            <View className="mb-6">
-                                <Text className="text-gray-500 text-[10px] font-black uppercase tracking-[2px] mb-3">Unit Alias</Text>
+                        <View className="flex-row gap-6 mb-10">
+                            <View className="flex-1">
+                                <Text className="text-gray-400 text-[10px] font-black uppercase tracking-[4px] mb-4 ml-6">Power (kW)</Text>
                                 <TextInput
-                                    className={`${isDark ? 'bg-slate-800 text-white' : 'bg-gray-50 text-gray-900'} rounded-[24px] p-5 font-bold text-base`}
-                                    placeholder="e.g., Ultra-Charge 1"
-                                    placeholderTextColor="#94A3B8"
-                                    value={formData.name}
-                                    onChangeText={(text) => setFormData({ ...formData, name: text })}
+                                    className="bg-gray-50 rounded-[35px] p-8 border border-gray-100 font-black text-xl text-gray-900"
+                                    keyboardType="numeric"
+                                    value={String(formData.power)}
+                                    onChangeText={text => setFormData({ ...formData, power: Number(text) })}
                                 />
                             </View>
-
-                            {/* Classification */}
-                            <View className="mb-6">
-                                <Text className="text-gray-500 text-[10px] font-black uppercase tracking-[2px] mb-3">Classification</Text>
-                                <View className="flex-row flex-wrap gap-3">
-                                    {['Slow', 'Medium', 'Rapid', 'Super Charge'].map((type) => (
-                                        <TouchableOpacity
-                                            key={type}
-                                            activeOpacity={0.7}
-                                            onPress={() => setFormData({
-                                                ...formData,
-                                                type: type as any,
-                                                power: type === 'Super Charge' ? 150 : type === 'Rapid' ? 50 : type === 'Medium' ? 22 : 7
-                                            })}
-                                            className={`px-5 py-4 rounded-2xl border ${formData.type === type ? 'bg-emerald-600 border-emerald-600' : (isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200')}`}
-                                        >
-                                            <Text className={`text-center font-black text-xs ${formData.type === type ? 'text-white' : 'text-gray-500'}`}>{type}</Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </View>
-                            </View>
-
-                            <View className="flex-row gap-5 mb-6">
-                                {/* Power */}
-                                <View className="flex-1">
-                                    <Text className="text-gray-500 text-[10px] font-black uppercase tracking-[2px] mb-3">Power (kW)</Text>
-                                    <TextInput
-                                        className={`${isDark ? 'bg-slate-800 text-white' : 'bg-gray-50 text-gray-900'} rounded-[24px] p-5 font-bold text-base`}
-                                        placeholder="150"
-                                        placeholderTextColor="#94A3B8"
-                                        keyboardType="numeric"
-                                        value={String(formData.power)}
-                                        onChangeText={(text) => setFormData({ ...formData, power: Number(text) })}
-                                    />
-                                </View>
-                                {/* Price */}
-                                <View className="flex-1">
-                                    <Text className="text-gray-500 text-[10px] font-black uppercase tracking-[2px] mb-3">Rate (₹/kWh)</Text>
-                                    <TextInput
-                                        className={`${isDark ? 'bg-slate-800 text-white' : 'bg-gray-50 text-gray-900'} rounded-[24px] p-5 font-bold text-base`}
-                                        placeholder="12"
-                                        placeholderTextColor="#94A3B8"
-                                        keyboardType="numeric"
-                                        value={String(formData.pricePerKwh)}
-                                        onChangeText={(text) => setFormData({ ...formData, pricePerKwh: Number(text) })}
-                                    />
-                                </View>
-                            </View>
-
-                            {/* Placement */}
-                            <View className="mb-10">
-                                <Text className="text-gray-500 text-[10px] font-black uppercase tracking-[2px] mb-3">Unit Placement</Text>
+                            <View className="flex-1">
+                                <Text className="text-gray-400 text-[10px] font-black uppercase tracking-[4px] mb-4 ml-6">Rate (₹)</Text>
                                 <TextInput
-                                    className={`${isDark ? 'bg-slate-800 text-white' : 'bg-gray-50 text-gray-900'} rounded-[24px] p-5 font-bold text-base`}
-                                    placeholder="Section A, Row 4"
-                                    placeholderTextColor="#94A3B8"
-                                    value={formData.location}
-                                    onChangeText={(text) => setFormData({ ...formData, location: text })}
+                                    className="bg-gray-50 rounded-[35px] p-8 border border-gray-100 font-black text-xl text-gray-900"
+                                    keyboardType="numeric"
+                                    value={String(formData.pricePerKwh)}
+                                    onChangeText={text => setFormData({ ...formData, pricePerKwh: Number(text) })}
                                 />
                             </View>
+                        </View>
 
-                            <TouchableOpacity
-                                activeOpacity={0.8}
-                                onPress={editingCharger ? handleUpdateCharger : handleAddCharger}
-                                className="bg-emerald-600 rounded-[30px] py-6 items-center shadow-xl shadow-emerald-500/40"
-                            >
-                                <Text className="text-white font-black uppercase tracking-[3px] text-sm">
-                                    {editingCharger ? 'Push Updates' : 'Initialize Unit'}
-                                </Text>
-                            </TouchableOpacity>
-                        </ScrollView>
-                    </View>
+                        <View className="mb-12">
+                            <Text className="text-gray-400 text-[10px] font-black uppercase tracking-[4px] mb-4 ml-6">Node Location</Text>
+                            <TextInput
+                                className="bg-gray-50 rounded-[35px] p-8 border border-gray-100 font-black text-xl text-gray-900"
+                                placeholder="Wing / Section"
+                                value={formData.location}
+                                onChangeText={text => setFormData({ ...formData, location: text })}
+                            />
+                        </View>
+
+                        <TouchableOpacity
+                            onPress={handleSaveCharger}
+                            activeOpacity={0.9}
+                            className="bg-emerald-600 py-8 rounded-[40px] items-center shadow-2xl shadow-emerald-600/40"
+                        >
+                            <Text className="text-white font-black uppercase tracking-[4px] text-xs">Initialize Hardlink</Text>
+                        </TouchableOpacity>
+                    </Animated.View>
                 </View>
             </Modal>
         </View>

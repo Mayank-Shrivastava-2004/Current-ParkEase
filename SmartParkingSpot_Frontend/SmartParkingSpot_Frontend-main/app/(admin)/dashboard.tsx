@@ -11,6 +11,7 @@ import {
     Alert,
     Modal,
     ActivityIndicator,
+    RefreshControl,
 } from 'react-native';
 import Animated, { FadeInUp } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -101,15 +102,16 @@ export default function AdminDashboardScreen() {
     const [adminProfile, setAdminProfile] = useState<any>(null);
     const [isDark, setIsDark] = useState(false);
     const [range, setRange] = useState('WEEK'); // WEEK | MONTH | YEAR
+    const [refreshing, setRefreshing] = useState(false);
 
     const adminGradient: readonly [string, string, ...string[]] = ['#4F46E5', '#312E81'];
 
     const menuItems = [
         { icon: 'grid', label: 'Dashboard', route: '/(admin)/dashboard' },
         { icon: 'people', label: 'Manage Drivers', route: '/(admin)/drivers' },
-        { icon: 'checkmark-circle', label: 'Driver Approvals', route: '/(admin)/driver-approval' },
         { icon: 'business', label: 'Manage Providers', route: '/(admin)/providers' },
         { icon: 'alert-circle', label: 'Disputes', route: '/(admin)/disputes' },
+        { icon: 'notifications', label: 'Notifications', route: '/(admin)/notifications' },
         { icon: 'bar-chart', label: 'Analytics', route: '/(admin)/analytics' },
         { icon: 'person-circle', label: 'Account Profile', route: '/(admin)/profile' },
         { icon: 'settings', label: 'Settings', route: '/(admin)/settings' },
@@ -182,9 +184,44 @@ export default function AdminDashboardScreen() {
         loadDashboardData();
     }, [range]);
 
+    const onRefresh = async () => {
+        setRefreshing(true);
+        const token = await AsyncStorage.getItem('token');
+        if (token) {
+            const [analyticsRes, provRes, driveRes, profileRes] = await Promise.all([
+                fetch(`${BASE_URL}/api/admin/analytics?range=${range}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }),
+                fetch(`${BASE_URL}/api/admin/providers?status=PENDING`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }),
+                fetch(`${BASE_URL}/api/admin/drivers?status=PENDING`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }),
+                fetch(`${BASE_URL}/api/profile`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+            ]);
+            if (analyticsRes.ok) setAnalytics(await analyticsRes.json());
+            if (profileRes.ok) setAdminProfile(await profileRes.json());
+        }
+        setRefreshing(false);
+    };
+
     const handleLogout = async () => {
         await AsyncStorage.clear();
         router.replace('/' as any);
+    };
+
+    const formatMetric = (val: number, isCurrency = false) => {
+        if (!val) return isCurrency ? '₹0' : '0';
+        if (isCurrency) {
+            if (val >= 100000) return `₹${(val / 100000).toFixed(1)}L`;
+            if (val >= 1000) return `₹${(val / 1000).toFixed(1)}K`;
+            return `₹${val}`;
+        }
+        if (val >= 1000) return `${(val / 1000).toFixed(1)}K`;
+        return val.toString();
     };
 
     if (loading) {
@@ -214,7 +251,7 @@ export default function AdminDashboardScreen() {
                 isOpen={sidebarVisible}
                 onClose={() => setSidebarVisible(false)}
                 userName={adminProfile?.name || 'Administrator'}
-                userRole="Root Authority"
+                userRole={adminProfile?.role || 'Root Authority'}
                 userStatus="Mainframe Online"
                 menuItems={menuItems}
                 onLogout={handleLogout}
@@ -222,49 +259,66 @@ export default function AdminDashboardScreen() {
                 dark={isDark}
             />
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 100 }}
+                refreshControl={
+                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={isDark ? "#fff" : "#4F46E5"} />
+                }
+            >
                 {/* USER METRICS */}
                 <View className="px-5 mt-6">
-                    <Text className={`font-black text-lg mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>Network Growth</Text>
+                    <Text className={`font-black text-lg mb-4 ${isDark ? 'text-white' : 'text-gray-900'}`}>System Multi-Tenant Pulse</Text>
+                    <View className="flex-row gap-4 mb-4">
+                        <StatsCard
+                            icon="cash"
+                            iconColor="#10B981"
+                            iconBgColor={isDark ? "bg-emerald-500/10" : "bg-emerald-50"}
+                            label="Net Revenue (15%)"
+                            value={formatMetric(analytics?.summary?.totalRevenue || 0, true)}
+                            dark={isDark}
+                            onPress={() => router.push('/(admin)/financials')}
+                        />
+                        <StatsCard
+                            icon="flash"
+                            iconColor="#F59E0B"
+                            iconBgColor={isDark ? "bg-amber-500/10" : "bg-amber-50"}
+                            label="Total Bookings"
+                            value={formatMetric(analytics?.summary?.completedBookings || 0)}
+                            dark={isDark}
+                            onPress={() => router.push('/(admin)/all-bookings')}
+                        />
+                    </View>
                     <View className="flex-row gap-4">
                         <StatsCard
                             icon="car"
-                            iconColor="#10B981"
-                            iconBgColor={isDark ? "bg-emerald-500/10" : "bg-emerald-50"}
-                            label="Drivers"
-                            value={analytics?.userGrowth?.drivers?.total || 0}
-                            trend={{ value: 12, isPositive: true }}
+                            iconColor="#3B82F6"
+                            iconBgColor={isDark ? "bg-blue-500/10" : "bg-blue-50"}
+                            label="Active Drivers"
+                            value={formatMetric(analytics?.userGrowth?.drivers?.total || 0)}
                             dark={isDark}
+                            onPress={() => router.push({ pathname: '/(admin)/drivers', params: { filter: 'active' } } as any)}
                         />
                         <StatsCard
                             icon="business"
                             iconColor="#8B5CF6"
                             iconBgColor={isDark ? "bg-purple-500/10" : "bg-purple-50"}
-                            label="Providers"
-                            value={analytics?.userGrowth?.providers?.total || 0}
-                            trend={{ value: 5, isPositive: true }}
+                            label="Parking Units"
+                            value={formatMetric(analytics?.userGrowth?.providers?.total || 0)}
                             dark={isDark}
+                            onPress={() => router.push('/(admin)/providers')}
                         />
                     </View>
                 </View>
 
                 {/* USER GROWTH CHARTS */}
                 <View className="px-5 mt-8">
-                    {/* Range Selector */}
-                    <View className={`flex-row mb-6 bg-slate-200 dark:bg-slate-800 p-1 rounded-xl self-start`}>
-                        {['WEEK', 'MONTH', 'YEAR'].map((r) => (
-                            <TouchableOpacity
-                                key={r}
-                                onPress={() => setRange(r)}
-                                className={`px-4 py-2 rounded-lg ${range === r ? 'bg-white shadow-sm' : ''}`}
-                            >
-                                <Text className={`text-xs font-bold ${range === r ? 'text-indigo-600' : 'text-gray-500'}`}>{r}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-
                     {/* Driver Growth Chart */}
-                    <View className="mb-8">
+                    <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => router.push('/(admin)/drivers')}
+                        className="mb-8"
+                    >
                         <LineChart
                             data={(analytics?.userGrowth?.growthTrend || []).map((t: any) => ({
                                 label: t.label,
@@ -274,10 +328,13 @@ export default function AdminDashboardScreen() {
                             fillColor="#10B981"
                             title="Driver Acquisition"
                         />
-                    </View>
+                    </TouchableOpacity>
 
                     {/* Provider Growth Chart */}
-                    <View>
+                    <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => router.push('/(admin)/providers')}
+                    >
                         <LineChart
                             data={(analytics?.userGrowth?.growthTrend || []).map((t: any) => ({
                                 label: t.label,
@@ -287,7 +344,7 @@ export default function AdminDashboardScreen() {
                             fillColor="#8B5CF6"
                             title="Provider Onboarding"
                         />
-                    </View>
+                    </TouchableOpacity>
                 </View>
 
 
@@ -310,7 +367,7 @@ export default function AdminDashboardScreen() {
                         pendingProviders.map((user, idx) => (
                             <TouchableOpacity
                                 key={user.id + user.type}
-                                onPress={() => router.push(user.type === 'PROVIDER' ? `/(admin)/providers` : `/(admin)/driver-approval` as any)}
+                                onPress={() => router.push(user.type === 'PROVIDER' ? `/(admin)/providers` : `/(admin)/drivers` as any)}
                                 className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-100'} rounded-[32px] p-6 mb-4 flex-row items-center border shadow-sm`}
                             >
                                 <View className={`w-14 h-14 ${isDark ? 'bg-indigo-500/10 border-indigo-500/20' : 'bg-indigo-50 border-indigo-100'} rounded-2xl items-center justify-center mr-4 border`}>

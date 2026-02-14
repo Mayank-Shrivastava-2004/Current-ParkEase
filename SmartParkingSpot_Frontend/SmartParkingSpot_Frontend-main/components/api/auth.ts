@@ -21,6 +21,9 @@ export interface RegisterRequest {
     parkingAreaName?: string;
     location?: string;
     totalSlots?: number;
+    ownerName?: string;
+    aadharNumber?: string;
+    propertyPermitNumber?: string;
     // Driver specific fields
     vehicleName?: string;
     vehicleNumber?: string;

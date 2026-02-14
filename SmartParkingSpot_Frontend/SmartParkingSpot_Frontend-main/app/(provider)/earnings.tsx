@@ -1,373 +1,279 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
+    Alert,
+    Dimensions,
+    Modal,
     ScrollView,
     StatusBar,
     Text,
-    TouchableOpacity,
     TextInput,
+    TouchableOpacity,
     View,
-    Modal,
-    Alert,
 } from 'react-native';
-import Animated, { FadeInUp } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import BASE_URL from '../../constants/api';
 import UnifiedHeader from '../../components/UnifiedHeader';
-import UnifiedSidebar from '../../components/UnifiedSidebar';
-import BarChart from '../../components/BarChart';
-import StatsCard from '../../components/StatsCard';
-import LineChart from '../../components/LineChart';
+import Animated, { FadeInUp, ZoomIn } from 'react-native-reanimated';
+import { BarChart } from 'react-native-chart-kit';
+import BASE_URL from '../../constants/api';
+import axios from 'axios';
 
 const API = BASE_URL;
+const { width } = Dimensions.get('window');
 
 export default function ProviderEarningsScreen() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
-    const [sidebarOpen, setSidebarOpen] = useState(false);
-    const [isDark, setIsDark] = useState(false);
     const [userName, setUserName] = useState('Provider');
     const [data, setData] = useState<any>({
         summary: {
             totalEarnings: 0,
-            thisMonth: 0,
-            lastMonth: 0,
-            growth: 0,
-            pendingPayout: 0,
             availableBalance: 0,
+            pendingPayout: 0,
+            totalWithdrawals: 0,
         },
         weeklyData: [],
-        monthlyTrend: [],
         transactions: [],
     });
-
     const [withdrawalModalVisible, setWithdrawalModalVisible] = useState(false);
     const [withdrawAmount, setWithdrawAmount] = useState('');
     const [upiId, setUpiId] = useState('');
+    const [submitting, setSubmitting] = useState(false);
 
-    const providerGradient: readonly [string, string, ...string[]] = ['#10B981', '#065F46'];
-
-    const menuItems = [
-        { icon: 'grid', label: 'Dashboard', route: '/(provider)/dashboard' },
-        { icon: 'business', label: 'My Spaces', route: '/(provider)/spaces' },
-        { icon: 'bar-chart', label: 'Earnings', route: '/(provider)/earnings' },
-        { icon: 'car', label: 'Live Traffic', route: '/(provider)/traffic' },
-        { icon: 'time', label: 'History', route: '/(provider)/history' },
-        { icon: 'flash', label: 'EV Station', route: '/(provider)/ev-station' },
-        { icon: 'headset', label: 'Support', route: '/(provider)/support' },
-    ];
-
-    useEffect(() => {
-        const initializeData = async () => {
-            try {
-                // Load Theme
-                const settingsStr = await AsyncStorage.getItem('admin_settings');
-                if (settingsStr) {
-                    const settings = JSON.parse(settingsStr);
-                    setIsDark(settings.darkMode ?? false);
-                }
-
-                const name = await AsyncStorage.getItem('userName');
-                if (name) setUserName(name);
-
-                await loadEarnings();
-            } catch (err) {
-                console.error('Initialization failed:', err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        initializeData();
-    }, []);
+    const providerGradient: readonly [string, string, ...string[]] = ['#059669', '#10B981'];
 
     const loadEarnings = async () => {
         try {
             const token = await AsyncStorage.getItem('token');
-            const res = await fetch(`${API}/api/provider/earnings`, {
+            const res = await axios.get(`${API}/api/provider/earnings`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
-            if (res.ok) {
-                const json = await res.json();
-                setData(json);
+            if (res.status === 200) {
+                setData(res.data);
             }
         } catch (err) {
             console.error('Earnings load failed:', err);
+        } finally {
+            setLoading(false);
         }
     };
 
-    const handleWithdraw = async () => {
-        if (!withdrawAmount || !upiId) {
-            Alert.alert('Error', 'Please enter amount and UPI ID');
-            return;
-        }
+    useEffect(() => {
+        const init = async () => {
+            const name = await AsyncStorage.getItem('userName');
+            if (name) setUserName(name);
+            await loadEarnings();
+        };
+        init();
+    }, []);
 
+    const handleWithdrawal = async () => {
         const amount = parseFloat(withdrawAmount);
-        if (isNaN(amount) || amount <= 0) {
-            Alert.alert('Error', 'Invalid amount');
+        if (!amount || amount <= 0) {
+            Alert.alert('Invalid Amount', 'Please specify a valid settlement volume.');
+            return;
+        }
+        if (amount > data.summary.availableBalance) {
+            Alert.alert('Insufficient Liquidity', 'The requested amount exceeds your available net balance.');
+            return;
+        }
+        if (!upiId.trim()) {
+            Alert.alert('Destination Required', 'Please provide a valid UPI identifier for the transfer.');
             return;
         }
 
-        if (amount > (data.summary.availableBalance || 0)) {
-            Alert.alert('Error', 'Insufficient balance');
-            return;
-        }
-
+        setSubmitting(true);
         try {
             const token = await AsyncStorage.getItem('token');
-            const res = await fetch(`${API}/api/provider/withdraw`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`
-                },
-                body: JSON.stringify({ amount, upiId })
+            const res = await axios.post(`${API}/api/provider/withdraw`, {
+                amount: amount,
+                upiId: upiId.trim(),
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
             });
 
-            const json = await res.json();
-
-            if (res.ok) {
-                Alert.alert('Success', 'Withdrawal requested successfully');
+            if (res.status === 200 || res.status === 201) {
+                Alert.alert('Protocol Initiated', 'Your withdrawal request has been queued for settlement.');
                 setWithdrawalModalVisible(false);
                 setWithdrawAmount('');
-                setUpiId('');
-                loadEarnings(); // Refresh data
-            } else {
-                Alert.alert('Error', json.message || 'Withdrawal failed');
+                loadEarnings();
             }
         } catch (err) {
-            Alert.alert('Error', 'Network error');
+            Alert.alert('Network Fault', 'Could not establish connection to the settlement gateway.');
+        } finally {
+            setSubmitting(false);
         }
-    };
-
-
-
-    const handleLogout = async () => {
-        await AsyncStorage.clear();
-        router.replace('/' as any);
     };
 
     if (loading) {
         return (
-            <View className={`flex-1 justify-center items-center ${isDark ? 'bg-slate-950' : 'bg-white'}`}>
-                <ActivityIndicator size="large" color="#10B981" />
-                <Text className="mt-4 text-emerald-600 font-bold uppercase tracking-widest text-xs">Financial Audit...</Text>
+            <View className="flex-1 justify-center items-center bg-white">
+                <ActivityIndicator size="small" color="#10B981" />
+                <Text className="mt-2 text-emerald-600 font-bold uppercase tracking-[2px] text-[8px]">Syncing Financial Node...</Text>
             </View>
         );
     }
 
+    const maxWeekly = Math.max(...(data.weeklyData?.map((d: any) => d.value) || [1]), 1);
+
     return (
-        <View className={`flex-1 ${isDark ? 'bg-slate-950' : 'bg-gray-50'}`}>
-            <StatusBar barStyle="light-content" />
+        <View className="flex-1 bg-gray-50">
+            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
             <UnifiedHeader
-                title="Profit Analytics"
-                subtitle="Financial Overview"
+                title="Revenue Hub"
+                subtitle="FINANCIAL OPS"
                 role="provider"
                 gradientColors={providerGradient}
-                onMenuPress={() => setSidebarOpen(true)}
+                onMenuPress={() => { }}
                 userName={userName}
                 showBackButton={true}
+                compact={true}
             />
 
-            <UnifiedSidebar
-                isOpen={sidebarOpen}
-                onClose={() => setSidebarOpen(false)}
-                userName={userName}
-                userRole="Parking Provider"
-                userStatus="Direct Payouts Active"
-                menuItems={menuItems}
-                onLogout={handleLogout}
-                gradientColors={providerGradient}
-                dark={isDark}
-            />
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60 }}>
+                {/* COMPACT REVENUE HERO */}
+                <View className="px-4 mt-4">
+                    <Animated.View entering={ZoomIn} className="bg-white rounded-3xl p-5 shadow-sm border border-emerald-50 items-center">
+                        <Text className="text-gray-400 text-[7px] font-black uppercase tracking-[3px]">Total Ecosystem Yield</Text>
+                        <Text className="text-3xl font-black text-gray-900 tracking-tighter mt-1">₹{data.summary.totalEarnings.toFixed(2)}</Text>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
-                {/* HERO STAT CARD */}
-                <View className="px-5 mt-6">
-                    <View className={`${isDark ? 'bg-slate-900 border-slate-800 shadow-black' : 'bg-white border-emerald-50 shadow-emerald-900/10'} rounded-[40px] p-8 shadow-2xl border items-center`}>
-                        <Text className="text-gray-500 text-[10px] font-black uppercase tracking-[3px] mb-2">Portfolio Value</Text>
-                        <Text className="text-emerald-500 text-5xl font-black tracking-tighter">?{data.summary.totalEarnings.toLocaleString()}</Text>
-                        <View className={`flex-row items-center mt-6 ${isDark ? 'bg-emerald-500/10' : 'bg-emerald-50'} px-4 py-2 rounded-full`}>
-                            <Ionicons name="trending-up" size={16} color="#10B981" />
-                            <Text className="text-emerald-500 font-black text-xs ml-2">+{data.summary.growth}% vs last month</Text>
-                        </View>
-
-                        <View className={`w-full h-[1px] ${isDark ? 'bg-slate-800' : 'bg-gray-100'} my-6`} />
-
-                        <View className="flex-row w-full justify-around mb-6">
-                            <View className="items-center">
-                                <Text className="text-gray-500 text-[8px] font-black uppercase tracking-widest">Payout Queue</Text>
-                                <Text className={`text-xl font-black mt-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>?{data.summary.pendingPayout.toLocaleString()}</Text>
+                        <View className="flex-row gap-3 mt-6 w-full">
+                            <View className="flex-1 items-center bg-emerald-50/20 p-3 rounded-xl border border-emerald-100">
+                                <Text className="text-emerald-600 text-base font-black tracking-tight">₹{data.summary.availableBalance.toFixed(2)}</Text>
+                                <Text className="text-gray-400 text-[6px] font-black uppercase tracking-widest">Available</Text>
                             </View>
-                            <View className="items-center">
-                                <Text className="text-gray-500 text-[8px] font-black uppercase tracking-widest">Avg Daily</Text>
-                                <Text className={`text-xl font-black mt-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>?{(data.summary.thisMonth / 30).toFixed(0)}</Text>
+                            <View className="flex-1 items-center bg-amber-50/20 p-3 rounded-xl border border-amber-100">
+                                <Text className="text-amber-600 text-base font-black tracking-tight">₹{data.summary.pendingPayout.toFixed(2)}</Text>
+                                <Text className="text-gray-400 text-[6px] font-black uppercase tracking-widest">In Transit</Text>
                             </View>
                         </View>
 
-                        <View className="flex-row w-full gap-3">
-                            <TouchableOpacity
-                                onPress={() => setWithdrawalModalVisible(true)}
-                                className="flex-1 bg-emerald-600 py-4 rounded-2xl shadow-lg shadow-emerald-600/30 items-center justify-center"
-                            >
-                                <Text className="text-white font-black text-[10px] uppercase tracking-wider">Withdraw Earnings</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-
-                {/* EARNINGS STATS GRID */}
-                <View className="px-5 mt-8">
-                    <View className="flex-row gap-4 mb-4">
-                        <StatsCard
-                            icon="cash"
-                            iconColor="#10B981"
-                            iconBgColor={isDark ? "bg-emerald-500/10" : "bg-emerald-50"}
-                            label="This Month"
-                            value={`?${data.summary.thisMonth.toLocaleString()}`}
-                            dark={isDark}
-                        />
-                        <StatsCard
-                            icon="wallet"
-                            iconColor="#3B82F6"
-                            iconBgColor={isDark ? "bg-blue-500/10" : "bg-blue-50"}
-                            label="Last Month"
-                            value={`?${data.summary.lastMonth.toLocaleString()}`}
-                            dark={isDark}
-                        />
-                    </View>
-                </View>
-
-                {/* WEEKLY REVENUE CHART */}
-                <View className="px-5 mt-6">
-                    <BarChart
-                        data={data.weeklyData}
-                        barColor="bg-emerald-500"
-                        title="Revenue Distribution (7-Day)"
-                        valuePrefix="?"
-                        dark={isDark}
-                    />
-                </View>
-
-                {/* MONTHLY GROWTH LINE CHART */}
-                <View className="px-5 mt-6">
-                    <LineChart
-                        data={data.monthlyTrend}
-                        lineColor="#10B981"
-                        fillColor="#10B981"
-                        title="Growth Trajectory"
-                        valuePrefix="?"
-                        dark={isDark}
-                    />
-                </View>
-
-                {/* TRANSACTION FEED */}
-                <View className="px-5 mt-10">
-                    <View className="flex-row items-center justify-between mb-6 px-2">
-                        <Text className={`font-black text-2xl tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>Ledger</Text>
-                        <TouchableOpacity>
-                            <Text className="text-emerald-500 font-bold text-xs uppercase tracking-widest">Export PDF</Text>
+                        <TouchableOpacity
+                            onPress={() => setWithdrawalModalVisible(true)}
+                            activeOpacity={0.9}
+                            className="bg-gray-900 mt-5 w-full py-3 rounded-xl items-center"
+                        >
+                            <Text className="text-white font-black uppercase tracking-[2px] text-[9px]">Execute Settlement</Text>
                         </TouchableOpacity>
-                    </View>
+                    </Animated.View>
+                </View>
 
-                    {data.transactions.map((txn: any, index: number) => (
-                        <View key={index} className={`${isDark ? 'bg-slate-900 border-slate-800 shadow-black' : 'bg-white border-gray-100 shadow-sm'} rounded-3xl p-5 mb-4 flex-row items-center border`}>
-                            <View className={`w-14 h-14 rounded-2xl items-center justify-center mr-4 ${txn.status === 'completed' ? (isDark ? 'bg-emerald-500/10' : 'bg-emerald-50') : (isDark ? 'bg-amber-500/10' : 'bg-amber-50')}`}>
-                                <Ionicons
-                                    name={txn.status === 'completed' ? "receipt" : "hourglass"}
-                                    size={24}
-                                    color={txn.status === 'completed' ? "#10B981" : "#F59E0B"}
-                                />
-                            </View>
-                            <View className="flex-1">
-                                <View className="flex-row items-center">
-                                    <Text className={`font-black text-lg tracking-tight ${isDark ? 'text-white' : 'text-gray-900'}`}>{txn.id}</Text>
-                                    <View className={`ml-2 px-2 py-0.5 rounded-full ${txn.status === 'completed' ? 'bg-emerald-500/20' : 'bg-amber-500/20'}`}>
-                                        <Text className={`text-[8px] font-black uppercase ${txn.status === 'completed' ? 'text-emerald-500' : 'text-amber-500'}`}>
-                                            {txn.status}
-                                        </Text>
-                                    </View>
+                {/* VELOCITY TRACK (COMPACT BAR CHART) */}
+                <View className="px-4 mt-6">
+                    <View className="bg-white rounded-3xl p-5 border border-emerald-50 shadow-sm">
+                        <Text className="text-gray-900 text-base font-black tracking-tight mb-4">Velocity Track</Text>
+                        <BarChart
+                            data={{
+                                labels: data.weeklyData?.map((d: any) => d.label) || [],
+                                datasets: [{
+                                    data: data.weeklyData?.map((d: any) => d.value) || [0, 0, 0, 0, 0, 0, 0]
+                                }]
+                            }}
+                            width={width - 48}
+                            height={160}
+                            yAxisLabel="₹"
+                            yAxisSuffix=""
+                            chartConfig={{
+                                backgroundColor: '#ffffff',
+                                backgroundGradientFrom: '#ffffff',
+                                backgroundGradientTo: '#ffffff',
+                                decimalPlaces: 0,
+                                color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`,
+                                labelColor: (opacity = 1) => `rgba(148, 163, 184, ${opacity})`,
+                                style: { borderRadius: 16 }
+                            }}
+                            style={{ borderRadius: 16, marginLeft: -16 }}
+                            fromZero
+                        />
+                    </View>
+                </View>
+
+                {/* LEDGER ACTIVITY (REAL TRANSACTIONS) */}
+                <View className="px-5 mt-6">
+                    <Text className="text-gray-900 text-lg font-black tracking-tight ml-2 mb-4">Ledger Activity</Text>
+                    {data.transactions?.map((tx: any, i: number) => (
+                        <Animated.View key={tx.id || i} entering={FadeInUp.delay(i * 30)}>
+                            <TouchableOpacity activeOpacity={0.8} className="bg-white rounded-2xl p-4 mb-3 border border-gray-50 shadow-sm flex-row items-center">
+                                <View className={`w-10 h-10 rounded-xl items-center justify-center mr-4 ${tx.amount > 0 ? 'bg-emerald-50' : 'bg-gray-50'}`}>
+                                    <Ionicons
+                                        name={tx.amount > 0 ? "arrow-down-circle" : "arrow-up-circle"}
+                                        size={20}
+                                        color={tx.amount > 0 ? "#10B981" : "#94A3B8"}
+                                    />
                                 </View>
-                                <Text className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mt-1">
-                                    {txn.date} � Slot {txn.slot}
-                                </Text>
-                            </View>
-                            <View className="items-end">
-                                <Text className={`font-black text-xl tracking-tighter ${isDark ? 'text-white' : 'text-gray-900'}`}>?{txn.amount}</Text>
-                                <Text className="text-gray-500 text-[8px] font-bold">via UPI</Text>
-                            </View>
-                        </View>
+                                <View className="flex-1">
+                                    <Text className="font-black text-sm text-gray-900 tracking-tight">{tx.type || 'Booking Settlement'}</Text>
+                                    <Text className="text-gray-400 text-[8px] font-bold uppercase mt-1">{tx.date}</Text>
+                                </View>
+                                <View className="items-end">
+                                    <Text className={`text-base font-black ${tx.amount > 0 ? 'text-emerald-600' : 'text-gray-900'}`}>
+                                        {tx.amount > 0 ? '+' : ''}₹{tx.amount.toFixed(2)}
+                                    </Text>
+                                    <Text className="text-[7px] font-black uppercase text-gray-300 mt-1">{tx.status}</Text>
+                                </View>
+                            </TouchableOpacity>
+                        </Animated.View>
                     ))}
 
-                    <TouchableOpacity className={`w-full py-5 rounded-3xl border border-dashed items-center justify-center mt-2 ${isDark ? 'border-slate-800' : 'border-gray-300'}`}>
-                        <Text className="text-gray-500 font-black uppercase tracking-widest text-xs">Load More Transactions</Text>
-                    </TouchableOpacity>
+                    {data.transactions?.length === 0 && (
+                        <View className="items-center py-10 bg-white rounded-[32px] border border-gray-50">
+                            <Ionicons name="receipt-outline" size={32} color="#E2E8F0" />
+                            <Text className="text-gray-300 font-bold uppercase tracking-[2px] text-[8px] mt-4">Clear Audit Logs</Text>
+                        </View>
+                    )}
                 </View>
             </ScrollView>
 
-            {/* WITHDRAWAL MODAL */}
-            <Modal visible={withdrawalModalVisible} transparent animationType="slide">
-                <View className="flex-1 bg-black/60 justify-end">
-                    <Animated.View entering={FadeInUp} className={`${isDark ? 'bg-slate-900' : 'bg-white'} rounded-t-[50px] p-8 pb-12`}>
-                        <View className={`w-16 h-1.5 rounded-full self-center mb-10 ${isDark ? 'bg-slate-800' : 'bg-gray-200'}`} />
+            {/* SETTLEMENT MODAL */}
+            <Modal visible={withdrawalModalVisible} transparent animationType="slide" statusBarTranslucent>
+                <View className="flex-1 bg-black/80 justify-end">
+                    <TouchableOpacity activeOpacity={1} className="flex-1" onPress={() => setWithdrawalModalVisible(false)} />
+                    <Animated.View entering={FadeInUp} className="bg-white rounded-t-[40px] p-8 pb-12">
+                        <View className="w-12 h-1 rounded-full self-center mb-8 bg-gray-100" />
 
-                        <Text className={`text-3xl font-black mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>Withdraw Funds</Text>
-                        <Text className="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-8">
-                            Available Balance: ?{(data.summary.availableBalance || 0).toLocaleString()}
-                        </Text>
+                        <Text className="text-2xl font-black mb-2 text-gray-900 tracking-tighter">Settlement</Text>
+                        <Text className="text-gray-400 text-[8px] font-black uppercase tracking-[3px] mb-8">Node Transfer Protocol</Text>
 
                         <View className="mb-6">
-                            <Text className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-3 ml-2">Amount</Text>
-                            <View className="flex-row items-center">
-                                <TextInput
-                                    placeholder="Enter amount"
-                                    placeholderTextColor={isDark ? '#475569' : '#94A3B8'}
-                                    value={withdrawAmount}
-                                    onChangeText={setWithdrawAmount}
-                                    keyboardType="numeric"
-                                    className={`flex-1 ${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-100 text-gray-900'} rounded-2xl p-5 font-bold border mr-2`}
-                                />
-                                <TouchableOpacity
-                                    onPress={() => setWithdrawAmount((data.summary.availableBalance || 0).toString())}
-                                    className="bg-emerald-600 p-5 rounded-2xl justify-center"
-                                >
-                                    <Text className="text-white font-black text-xs">MAX</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-
-                        <View className="mb-10">
-                            <Text className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-3 ml-2">UPI ID</Text>
+                            <Text className="text-gray-400 text-[8px] font-black uppercase tracking-[3px] mb-3 ml-4">Volume (₹)</Text>
                             <TextInput
-                                placeholder="username@upi"
-                                placeholderTextColor={isDark ? '#475569' : '#94A3B8'}
-                                value={upiId}
-                                onChangeText={setUpiId}
-                                className={`${isDark ? 'bg-slate-800 border-slate-700 text-white' : 'bg-gray-50 border-gray-100 text-gray-900'} rounded-2xl p-5 font-bold border`}
+                                className="bg-gray-50 rounded-2xl p-5 border border-gray-100 font-black text-2xl text-gray-900"
+                                keyboardType="numeric"
+                                placeholder="0.00"
+                                value={withdrawAmount}
+                                onChangeText={setWithdrawAmount}
                             />
                         </View>
 
-                        <View className="flex-row gap-4">
-                            <TouchableOpacity
-                                onPress={() => setWithdrawalModalVisible(false)}
-                                className={`flex-1 py-5 rounded-2xl items-center ${isDark ? 'bg-slate-800' : 'bg-gray-100'}`}
-                            >
-                                <Text className={`font-black uppercase tracking-widest text-xs ${isDark ? 'text-slate-300' : 'text-gray-900'}`}>Cancel</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                onPress={handleWithdraw}
-                                className="flex-1 py-5 bg-emerald-600 rounded-2xl items-center shadow-lg shadow-emerald-600/30"
-                            >
-                                <Text className="text-white font-black uppercase tracking-widest text-xs">Confirm</Text>
-                            </TouchableOpacity>
+                        <View className="mb-8">
+                            <Text className="text-gray-400 text-[8px] font-black uppercase tracking-[3px] mb-3 ml-4">UPI Destination</Text>
+                            <TextInput
+                                className="bg-gray-50 rounded-2xl p-5 border border-gray-100 font-black text-sm text-gray-900"
+                                placeholder="user@bank"
+                                value={upiId}
+                                autoCapitalize="none"
+                                onChangeText={setUpiId}
+                            />
                         </View>
+
+                        <TouchableOpacity
+                            onPress={handleWithdrawal}
+                            disabled={submitting}
+                            activeOpacity={0.9}
+                            className="bg-emerald-600 py-5 rounded-2xl items-center shadow-lg shadow-emerald-600/20"
+                        >
+                            {submitting ? (
+                                <ActivityIndicator size="small" color="white" />
+                            ) : (
+                                <Text className="text-white font-black uppercase tracking-[2px] text-[10px]">Execute Cloud Transfer</Text>
+                            )}
+                        </TouchableOpacity>
                     </Animated.View>
                 </View>
             </Modal>
-
-        </View >
+        </View>
     );
 }

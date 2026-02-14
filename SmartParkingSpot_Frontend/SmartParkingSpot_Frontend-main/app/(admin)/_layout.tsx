@@ -1,6 +1,12 @@
 import { Stack } from 'expo-router';
+import { useNotifications } from '@/hooks/useNotifications';
+import React from 'react';
 
 export default function AdminLayout() {
+    // 🔔 Register global notification listeners for Admin
+    // This hook handles cleanup automatically on unmount!
+    useNotifications();
+
     return (
         <Stack>
             <Stack.Screen name="index" options={{ title: 'Admin Login', headerShown: false }} />

@@ -11,7 +11,7 @@ import {
     ActivityIndicator,
     Alert,
 } from 'react-native';
-import Animated, { FadeInUp, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInUp, FadeInDown, ZoomIn } from 'react-native-reanimated';
 import UnifiedHeader from '../../components/UnifiedHeader';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,7 +21,6 @@ export default function ProviderSettingsScreen() {
     const [notifications, setNotifications] = useState(true);
     const [instantBooking, setInstantBooking] = useState(true);
     const [visibleToPublic, setVisibleToPublic] = useState(true);
-    const [isDark, setIsDark] = useState(false);
     const [loading, setLoading] = useState(true);
     const [userName, setUserName] = useState('Provider');
 
@@ -40,7 +39,6 @@ export default function ProviderSettingsScreen() {
             if (settings) {
                 const parsed = JSON.parse(settings);
                 setNotifications(parsed.notifications ?? true);
-                setIsDark(parsed.darkMode ?? false);
                 setInstantBooking(parsed.instantBooking ?? true);
                 setVisibleToPublic(parsed.visibleToPublic ?? true);
             }
@@ -62,17 +60,11 @@ export default function ProviderSettingsScreen() {
         }
     };
 
-    const toggleDark = (val: boolean) => {
-        setIsDark(val);
-        saveSetting('darkMode', val);
-        Alert.alert('System Update', `Dark mode ${val ? 'enabled' : 'disabled'}. Visual sync applied.`);
-    };
-
     const handleLogout = async () => {
-        Alert.alert("Logout", "Are you sure?", [
-            { text: "Cancel", style: "cancel" },
+        Alert.alert("Terminating Session", "Are you sure you want to disconnect from the Provider Hub?", [
+            { text: "Abort", style: "cancel" },
             {
-                text: "Exit", style: "destructive", onPress: async () => {
+                text: "Disconnect", style: "destructive", onPress: async () => {
                     await AsyncStorage.clear();
                     router.replace('/' as any);
                 }
@@ -81,86 +73,84 @@ export default function ProviderSettingsScreen() {
     };
 
     const SettingItem = ({ icon, label, description, value, onToggle, color = "#8B5CF6" }: any) => (
-        <View className={`flex-row items-center justify-between py-5 border-b ${isDark ? 'border-slate-800' : 'border-slate-50'}`}>
+        <View className="flex-row items-center justify-between py-8 border-b border-gray-50">
             <View className="flex-row items-center flex-1">
-                <View className={`w-12 h-12 ${isDark ? 'bg-slate-800' : 'bg-purple-50'} rounded-2xl items-center justify-center mr-4`}>
-                    <Ionicons name={icon} size={22} color={color} />
+                <View style={{ backgroundColor: `${color}15` }} className="w-16 h-16 rounded-[24px] items-center justify-center mr-6">
+                    <Ionicons name={icon} size={28} color={color} />
                 </View>
-                <View className="flex-1 pr-4">
-                    <Text className={`font-black text-base ${isDark ? 'text-white' : 'text-slate-900'}`}>{label}</Text>
-                    <Text className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">{description}</Text>
+                <View className="flex-1 pr-6">
+                    <Text className="font-black text-xl text-gray-900 tracking-tight">{label}</Text>
+                    <Text className="text-gray-400 text-[9px] font-black uppercase tracking-[3px] mt-2">{description}</Text>
                 </View>
             </View>
-            <Switch
-                value={value}
-                onValueChange={onToggle}
-                trackColor={{ false: isDark ? '#1E293B' : '#E2E8F0', true: isDark ? '#7C3AED' : '#DDD6FE' }}
-                thumbColor={value ? '#8B5CF6' : '#94A3B8'}
-            />
+            <View className="scale-110">
+                <Switch
+                    value={value}
+                    onValueChange={onToggle}
+                    trackColor={{ false: '#E2E8F0', true: '#C4B5FD' }}
+                    thumbColor={value ? '#8B5CF6' : '#94A3B8'}
+                />
+            </View>
         </View>
     );
 
     if (loading) {
         return (
-            <View className={`flex-1 justify-center items-center ${isDark ? 'bg-slate-950' : 'bg-white'}`}>
+            <View className="flex-1 justify-center items-center bg-white">
                 <ActivityIndicator size="large" color="#8B5CF6" />
+                <Text className="mt-4 text-purple-600 font-bold uppercase tracking-widest text-xs">Syncing Protocol...</Text>
             </View>
         );
     }
 
     return (
-        <View className={`flex-1 ${isDark ? 'bg-slate-950' : 'bg-gray-50'}`}>
-            <StatusBar barStyle="light-content" />
+        <View className="flex-1 bg-gray-50">
+            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
             <UnifiedHeader
                 title="Business Control"
                 subtitle="OPERATIONS HUB"
                 role="provider"
                 gradientColors={providerGradient}
-                onMenuPress={() => router.back()}
+                onMenuPress={() => { }}
                 userName={userName}
                 showBackButton={true}
             />
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
-
-                <View className="px-5 mt-6">
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
+                {/* ACCOUNT HERO */}
+                <View className="px-6 -mt-12">
                     <Animated.View
-                        entering={FadeInDown.duration(400)}
-                        className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-purple-50 shadow-2xl shadow-purple-900/10'} rounded-[40px] p-8 border flex-row items-center`}
+                        entering={ZoomIn.duration(400)}
+                        className="bg-white rounded-[60px] p-12 border border-white shadow-2xl shadow-indigo-900/10 flex-row items-center"
                     >
-                        <LinearGradient colors={['#8B5CF6', '#6D28D9']} className="w-20 h-20 rounded-[28px] items-center justify-center mr-6">
-                            <Text className="text-white text-3xl font-black">{userName.charAt(0).toUpperCase()}</Text>
+                        <LinearGradient colors={['#8B5CF6', '#6D28D9']} className="w-24 h-24 rounded-[35px] items-center justify-center mr-8 shadow-xl shadow-purple-600/30">
+                            <Text className="text-white text-4xl font-black">{userName.charAt(0).toUpperCase()}</Text>
                         </LinearGradient>
                         <View className="flex-1">
-                            <Text className={`text-2xl font-black ${isDark ? 'text-white' : 'text-slate-900'} tracking-tight`}>{userName}</Text>
-                            <Text className="text-purple-500 text-[9px] font-black uppercase mt-1 tracking-[2px]">Verified Partner</Text>
+                            <Text className="text-3xl font-black text-gray-900 tracking-tighter">{userName}</Text>
+                            <View className="bg-gray-50 px-5 py-2 rounded-full self-start mt-3 border border-gray-100">
+                                <Text className="text-purple-600 text-[10px] font-black uppercase tracking-[3px]">Verified Partner</Text>
+                            </View>
                         </View>
                     </Animated.View>
                 </View>
 
-                <View className="px-5 mt-8">
-                    <Text className="text-gray-400 text-[10px] font-black uppercase tracking-[4px] ml-4 mb-4">Core Systems</Text>
-                    <Animated.View entering={FadeInUp.delay(100)} className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-purple-50 shadow-sm'} rounded-[40px] p-8 border mb-8`}>
+                {/* SYSTEM SETTINGS */}
+                <View className="px-7 mt-16">
+                    <Text className="text-gray-900 text-3xl font-black tracking-tighter ml-4 mb-4">Operations Control</Text>
+                    <Animated.View entering={FadeInUp.delay(100)} className="bg-white rounded-[50px] p-12 border border-white shadow-sm mb-12">
                         <SettingItem
                             icon="notifications"
-                            label="Neural Link"
-                            description="Push notifications & Updates"
+                            label="Neuro Link"
+                            description="Real-time hub alerts"
                             value={notifications}
                             onToggle={(v: any) => { setNotifications(v); saveSetting('notifications', v); }}
                         />
                         <SettingItem
-                            icon="moon"
-                            label="Dark Matter"
-                            description="Interface synchronization"
-                            value={isDark}
-                            onToggle={toggleDark}
-                            color="#A78BFA"
-                        />
-                        <SettingItem
                             icon="flash"
                             label="Instant Flow"
-                            description="Auto-approve guest bookings"
+                            description="Auto-approve credentials"
                             value={instantBooking}
                             onToggle={(v: any) => { setInstantBooking(v); saveSetting('instantBooking', v); }}
                             color="#F59E0B"
@@ -168,19 +158,43 @@ export default function ProviderSettingsScreen() {
                         <SettingItem
                             icon="eye"
                             label="Node Visibility"
-                            description="Public listing on ecosystem"
+                            description="Public listing on grid"
                             value={visibleToPublic}
                             onToggle={(v: any) => { setVisibleToPublic(v); saveSetting('visibleToPublic', v); }}
                             color="#10B981"
                         />
+
+                        <TouchableOpacity
+                            onPress={() => Alert.alert('Security Protocol', 'Updating encryption keys for hub communication...')}
+                            className="flex-row items-center justify-between py-8"
+                        >
+                            <View className="flex-row items-center flex-1">
+                                <View className="bg-rose-50 w-16 h-16 rounded-[24px] items-center justify-center mr-6">
+                                    <Ionicons name="shield-checkmark" size={28} color="#F43F5E" />
+                                </View>
+                                <View className="flex-1 pr-6">
+                                    <Text className="font-black text-xl text-gray-900 tracking-tight">Access Integrity</Text>
+                                    <Text className="text-gray-400 text-[9px] font-black uppercase tracking-[3px] mt-2">Update security certificates</Text>
+                                </View>
+                            </View>
+                            <Ionicons name="chevron-forward" size={24} color="#CBD5E1" />
+                        </TouchableOpacity>
                     </Animated.View>
 
+                    {/* DANGER ZONE */}
+                    <Text className="text-rose-500 text-3xl font-black tracking-tighter ml-4 mb-4">Terminal Exit</Text>
                     <TouchableOpacity
                         onPress={handleLogout}
-                        className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-rose-50 border-rose-100'} rounded-[40px] p-8 border flex-row items-center justify-center mb-10`}
+                        activeOpacity={0.9}
+                        className="bg-rose-50 rounded-[50px] p-12 border border-rose-100 flex-row items-center justify-center mb-10 shadow-2xl shadow-rose-900/10"
                     >
-                        <Ionicons name="power" size={24} color="#F43F5E" />
-                        <Text className="text-rose-500 font-black ml-3 uppercase tracking-widest text-xs">Shutdown Terminal</Text>
+                        <View className="bg-white w-20 h-20 rounded-[30px] items-center justify-center mr-8 shadow-sm">
+                            <Ionicons name="power" size={40} color="#F43F5E" />
+                        </View>
+                        <View>
+                            <Text className="text-rose-600 font-black text-2xl tracking-tighter">Shut Down Hub</Text>
+                            <Text className="text-rose-400 text-[10px] font-black uppercase tracking-[3px] mt-2">Terminate all sessions</Text>
+                        </View>
                     </TouchableOpacity>
                 </View>
             </ScrollView>
